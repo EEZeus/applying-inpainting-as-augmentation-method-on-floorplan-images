@@ -35,6 +35,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=ROOT / "configs/sam3_floorplan.yaml")
     parser.add_argument("--mode", choices=("train", "test"), required=True)
+    parser.add_argument("--overrides", nargs="*", default=[],
+                        help="Hydra dotlist overrides, e.g. "
+                             "paths.dataset_root=/abs/path paths.experiment_log_dir=/abs/path")
     args = parser.parse_args()
 
     if args.mode == "train":
@@ -43,7 +46,7 @@ def main() -> None:
     register_omegaconf_resolvers()
     config = args.config.resolve()
     with initialize_config_dir(version_base="1.2", config_dir=str(config.parent)):
-        cfg = compose(config_name=config.stem)
+        cfg = compose(config_name=config.stem, overrides=list(args.overrides))
 
     with open_dict(cfg):
         if args.mode == "test":
