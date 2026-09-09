@@ -2,14 +2,17 @@
 # SAM 3 trained on the best augmentation strategies, both label tracks.
 # 3 strategies x {multiclass, agnostic} = 6 tasks. Each: build the SAM3 dataset
 # (augmented train + frozen real val/test) -> train 20 epochs -> test.
-# Baseline SAM3 used ~18-21 GB GPU RAM at res 1008, so 40 GB+ nodes suffice.
+# The SAM3 baselines peaked at ~33 GB torch.cuda.max_memory_allocated in
+# training on A100-80GB; with caching-allocator reservation/fragmentation the
+# real footprint is ~40-45 GB, and the augmented sets have more instances per
+# image. Stay on the 80 GB tier the baseline used.
 #SBATCH --job-name=fp-sam3-aug
 #SBATCH --array=0-5%3
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G
 #SBATCH --time=05:00:00
-#SBATCH --partition=A100-40GB,A100-PCI,A100-80GB,A100-RP,H100,H100-PCI,H100-RP,L40S,L40S-DSA,RTXA6000
+#SBATCH --partition=A100-80GB,A100-RP,H100,H100-PCI,H100-RP,H200,B200,RTXB6000
 #SBATCH --output=outputs/logs/sam3-aug-%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
@@ -21,6 +24,7 @@ export PYTHONPATH="$PWD:$SAM3_ROOT:${PYTHONPATH:-}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-/netscratch/espandar/huggingface_cache/hub}"
 export TORCH_HOME="${TORCH_HOME:-/netscratch/espandar/torch_cache}"
 export OMP_NUM_THREADS=2
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 [[ -f "$SAM3_ROOT/sam3/train/train.py" ]] || { echo "SAM 3 source missing at $SAM3_ROOT" >&2; exit 2; }
 [[ -x "$SAM3_ENV/bin/python" ]] || { echo "SAM 3 env missing at $SAM3_ENV" >&2; exit 2; }
