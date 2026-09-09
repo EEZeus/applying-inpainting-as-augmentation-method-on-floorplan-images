@@ -17,8 +17,8 @@ CLUSTER_TOPLEVEL=${CLUSTER_TOPLEVEL:-/netscratch/espandar/inpainting}
 ORIGIN_URL=${ORIGIN_URL:-https://github.com/EEZeus/applying-inpainting-as-augmentation-method-on-floorplan-images.git}
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
-if [[ -n $(git -C "$REPO_ROOT" status --porcelain) ]]; then
-  echo "refusing: local working tree is dirty - commit first" >&2
+if [[ -n $(git -C "$REPO_ROOT" status --porcelain --untracked-files=no) ]]; then
+  echo "refusing: tracked files have uncommitted changes - commit first" >&2
   exit 1
 fi
 SHORT=$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD)
