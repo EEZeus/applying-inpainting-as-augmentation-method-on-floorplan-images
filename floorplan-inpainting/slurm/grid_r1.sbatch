@@ -11,10 +11,14 @@
 #SBATCH --array=0-55%16
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6
-#SBATCH --mem=32G
-#SBATCH --time=08:00:00
+# 32G OOM-killed the augmented-data arms (e6/e7/e9/e10/e11/e12/e13) mid-run;
+# seed_42 used 48G. 64G gives headroom (these nodes have 480G+).
+#SBATCH --mem=64G
+#SBATCH --time=16:00:00
 #SBATCH --output=outputs/logs/grid-r1-%A_%a.out
-#SBATCH --partition=RTXA6000,RTX3090,L40S,L40S-DSA,V100-32GB,A100-40GB,A100-PCI
+# Broad node pool for throughput. V100-32GB nodes ran ~8x slower here, but the
+# 16 h walltime absorbs that and Slurm prefers faster free nodes anyway.
+#SBATCH --partition=L40S,L40S-DSA,V100-32GB,RTX3090,A100-40GB,A100-80GB,A100-RP,A100-PCI,RTXA6000,H100,H100-PCI,H100-RP,batch
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONPATH="$PWD:${PYTHONPATH:-}"

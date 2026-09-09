@@ -113,8 +113,13 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     num_classes = 2 if class_agnostic else 20
     last_path = checkpoint_dir / "last.pth"
     restoring = resume and last_path.exists()
+    # Always build the pretrained architecture: torchvision freezes the early
+    # backbone layers only when weights are loaded, so pretrained=False would
+    # give a different trainable-parameter set and break optimizer.load_state_dict
+    # on --resume. The pretrained weights are overwritten from the checkpoint
+    # below when restoring, and come from the local TORCH_HOME cache.
     model = build_mask_rcnn(num_classes, model_cfg["min_size"], model_cfg["max_size"],
-                            pretrained=not restoring).to(device)
+                            pretrained=True).to(device)
     params = [parameter for parameter in model.parameters() if parameter.requires_grad]
     if model_cfg["optimizer"].lower() == "adamw":
         optimizer = torch.optim.AdamW(params, lr=model_cfg["learning_rate"],
