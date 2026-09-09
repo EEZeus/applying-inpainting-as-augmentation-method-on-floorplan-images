@@ -24,13 +24,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# run_experiment.py --eval-checkpoint writes to
+#   <output_root>/<track>/<arm>/<eval_tag>/result.json  with output_root = outputs/cv/fold{k}
+CV_ROOT = "outputs/cv"
+EVAL_TAG = "eval"
 ARMS = [
-    ("e0", "outputs/experiments", "Original (no aug)"),
-    ("e1", "outputs/experiments", "Rare-weighted sampling"),
-    ("e6", "outputs/experiments", "Strategy B"),
-    ("e8", "outputs/experiments_c_multi", "Strategy C copy-paste"),
-    ("e10", "outputs/experiments_c_multi", "Strategy C diffusion inpaint"),
-    ("e12", "outputs/experiments_lora", "LoRA Strategy B"),
+    ("e0", "Original (no aug)"),
+    ("e1", "Rare-weighted sampling"),
+    ("e6", "Strategy B"),
+    ("e8", "Strategy C copy-paste"),
+    ("e10", "Strategy C diffusion inpaint"),
+    ("e12", "LoRA Strategy B"),
 ]
 BASELINE = "e0"
 RARE_IDS = {11, 12, 13, 14, 15, 16}
@@ -55,8 +59,8 @@ def _wilcoxon(arm_vals, base_vals):
     return res
 
 
-def _fold_path(root, track, arm, k):
-    return ROOT / root / f"fold{k}" / track / arm / "eval" / "result.json"
+def _fold_path(track, arm, k):
+    return ROOT / CV_ROOT / f"fold{k}" / track / arm / EVAL_TAG / "result.json"
 
 
 def main():
@@ -74,14 +78,14 @@ def main():
     for track in args.tracks:
         base_overall = {}
         for k in range(args.folds):
-            p = _fold_path(dict((a, r) for a, r, _ in ARMS)[BASELINE], track, BASELINE, k)
+            p = _fold_path(track, BASELINE, k)
             if p.is_file():
                 base_overall[k] = json.loads(p.read_text())["test_metrics"]["mask"]["AP"]
 
-        for arm, root, label in ARMS:
+        for arm, label in ARMS:
             folds = {}
             for k in range(args.folds):
-                p = _fold_path(root, track, arm, k)
+                p = _fold_path(track, arm, k)
                 if p.is_file():
                     folds[k] = json.loads(p.read_text())
 
