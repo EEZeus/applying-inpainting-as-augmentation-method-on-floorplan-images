@@ -12,7 +12,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G
 #SBATCH --time=05:00:00
-#SBATCH --partition=A100-80GB,A100-RP,H100,H100-PCI,H100-RP,H200,B200,RTXB6000
+#SBATCH --partition=A100-80GB,A100-RP,H100,H100-PCI,H100-RP,H200
 #SBATCH --output=outputs/logs/sam3-aug-%A_%a.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
