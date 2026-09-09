@@ -129,6 +129,18 @@ scratch:
     convert_mask_to_rle: true
     detection_threshold: 0.3
     use_presence: ${scratch.use_presence_eval}
+  # Training batches must be keyed so the trainer resolves trainer.loss.all
+  # (Sam3LossWrapper). Trainer._find_loss falls back to trainer.loss.default
+  # (DummyLoss, constant 0 with no grad_fn) for any key it cannot match, which
+  # breaks loss.backward(). Meta's official train configs use dict_key: all.
+  train_collate_fn:
+    _target_: sam3.train.data.collator.collate_fn_api
+    _partial_: true
+    repeats: 1
+    dict_key: all
+    with_seg_masks: true
+  # Validation batches are keyed to match meters.val.floorplan; val does not
+  # backprop, so the DummyLoss fallback for this key is fine.
   collate_fn:
     _target_: sam3.train.data.collator.collate_fn_api
     _partial_: true
@@ -175,7 +187,7 @@ trainer:
       num_workers: 6
       pin_memory: true
       drop_last: true
-      collate_fn: ${scratch.collate_fn}
+      collate_fn: ${scratch.train_collate_fn}
     val:
       _target_: sam3.train.data.torch_dataset.TorchDataset
       dataset:
