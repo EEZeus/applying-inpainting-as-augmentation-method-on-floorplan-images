@@ -47,6 +47,11 @@ transforms:
   val:
     - _target_: sam3.train.transforms.basic_for_api.ComposeAPI
       transforms:
+        # Must precede any geometric transform: with enable_segmentation the val
+        # dataset yields RLE-encoded masks, and RandomResizeAPI.resize() indexes
+        # obj.segment as a tensor. Without this the first val epoch dies with
+        # "KeyError: (None, None)". Matches Meta's official *_eval / *_val configs.
+        - _target_: sam3.train.transforms.segmentation.DecodeRle
         - _target_: sam3.train.transforms.basic_for_api.RandomResizeAPI
           sizes: ${scratch.resolution}
           max_size:
