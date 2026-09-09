@@ -8,9 +8,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+MULTICLASS_OUTPUT = ROOT / "data/sam3_floorplan"
+AGNOSTIC_OUTPUT = ROOT / "data/sam3_floorplan_agnostic"
+
 
 def _ids(path: Path) -> set[int]:
     return {int(value) for value in path.read_text(encoding="utf-8").splitlines() if value.strip()}
+
+
+def _to_class_agnostic(coco: dict) -> dict:
+    """Collapse every instance onto one foreground concept.
+
+    Mirrors src.data.class_agnostic.make_class_agnostic_coco: geometry, image
+    records and annotation IDs are unchanged; only categories and category_id
+    change. SAM 3 then trains/evaluates with the single text concept "room".
+    """
+    coco["categories"] = [{"id": 1, "name": "room", "supercategory": "room"}]
+    for annotation in coco["annotations"]:
+        annotation["category_id"] = 1
+    coco["info"] = {**coco.get("info", {}), "class_agnostic": True}
+    return coco
 
 
 def main() -> None:
@@ -18,10 +35,17 @@ def main() -> None:
     parser.add_argument("--annotations", type=Path, default=ROOT / "data/processed/instances_deduplicated.json")
     parser.add_argument("--images", type=Path, default=ROOT.parent / "area_segmentation_coco/images")
     parser.add_argument("--splits", type=Path, default=ROOT / "data/splits")
-    parser.add_argument("--output", type=Path, default=ROOT / "data/sam3_floorplan")
+    parser.add_argument("--output", type=Path, default=None,
+                        help="defaults to data/sam3_floorplan, or data/sam3_floorplan_agnostic with --class-agnostic")
+    parser.add_argument("--class-agnostic", action="store_true",
+                        help="collapse all 19 room categories onto a single 'room' concept")
     args = parser.parse_args()
+    if args.output is None:
+        args.output = AGNOSTIC_OUTPUT if args.class_agnostic else MULTICLASS_OUTPUT
 
     coco = json.loads(args.annotations.read_text(encoding="utf-8"))
+    if args.class_agnostic:
+        coco = _to_class_agnostic(coco)
     images_by_id = {int(image["id"]): image for image in coco["images"]}
     split_ids = {name: _ids(args.splits / f"{name}.txt") for name in ("train", "val", "test")}
     if any(split_ids[a] & split_ids[b] for a, b in (("train", "val"), ("train", "test"), ("val", "test"))):
