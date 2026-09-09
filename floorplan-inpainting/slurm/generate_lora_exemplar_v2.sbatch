@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH --job-name=lora-exemplar-v2
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=48G
+#SBATCH --time=24:00:00
+#SBATCH --output=outputs/logs/lora-exemplar-v2-%j.out
+#SBATCH --partition=L40S-DSA,V100-32GB,A100-40GB,A100-80GB,A100-RP,A100-PCI,RTXA6000,H100,H100-PCI,H100-RP
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
+export PYTHONPATH="$PWD:${PYTHONPATH:-}" HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 MPLBACKEND=Agg
+PYTHON=/netscratch/espandar/miniconda3/envs/inpainting/bin/python
+"$PYTHON" scripts/generate_lora_exemplar_v2.py --retry-errors
+"$PYTHON" scripts/validate_augmented_dataset.py data/augmented_lora_exemplar_v2/instances_train_aug_c.json

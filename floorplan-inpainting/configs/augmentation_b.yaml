@@ -1,0 +1,60 @@
+seed: 1042
+dataset:
+  annotation_file: data/processed/instances_deduplicated.json
+  image_dir: ../area_segmentation_coco/images
+  train_split: data/splits/train.txt
+  rare_classes_file: configs/rare_classes.yaml
+classes:
+  source_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  target_ids: [12, 13, 15, 16]
+geometry:
+  tolerance: 0.50
+balancing:
+  mode: capped_multiplier
+  multiplier: 3
+  max_target_instances: 20
+crop:
+  context_fraction: 1.0
+  output_size: 512
+mask:
+  erosion_fraction: 0.02
+  min_erosion_px: 2
+  max_erosion_px: 12
+  structure_protection: true
+  dark_threshold: auto
+  structure_dilation_px: 2
+  min_mutable_fraction: 0.20
+  min_mutable_fraction_by_category: {}
+prompt:
+  template: >-
+    architectural technical floor plan, {category_name}, clean 2D technical drawing,
+    preserve existing room geometry, technical plan symbols, white background
+  negative_prompt: photograph, perspective, 3d render, people, realistic scene
+generation:
+  backend: stable_diffusion_inpaint
+  model_name: stable-diffusion-v1-5/stable-diffusion-inpainting
+  model_revision: null
+  cache_dir: data/cache/huggingface
+  device: cuda
+  dtype: fp16
+  num_inference_steps: 25
+  guidance_scale: 6.0
+quality:
+  require_zero_outside_changes: true
+  require_zero_boundary_changes: true
+  min_changed_fraction_inside: 0.01
+  min_mean_absolute_change: 1.0
+  min_generated_region_std: 2.0
+  max_near_white_fraction_after: 0.995
+  max_dark_fraction_after: 0.50
+  max_dark_fraction_increase: 0.30
+  max_saturated_fraction_after: 0.50
+  max_saturated_fraction_increase: 0.30
+output:
+  dataset_dir: data/augmented_b
+  qa_dir: outputs/augmentation_b
+qa:
+  max_examples: 30
+  rows_per_sheet: 5
+runtime:
+  num_workers: 2

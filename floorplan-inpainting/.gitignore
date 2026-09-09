@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Machine-local ML artifacts. Keep these outside Git; scripts recreate them.
+/data/
+/models/
+/outputs/
+/runs/
+
+# Checkpoints and experiment trackers written outside the standard directories.
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+events.out.*
+wandb/
+mlruns/
+
+# Local configuration and release archives.
+.env
+.env.*
+*.tar.gz
+*.sha256

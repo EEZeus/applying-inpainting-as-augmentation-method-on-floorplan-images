@@ -1,0 +1,16 @@
+id: e4
+method: Strategy A + rare-centered crops
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [strategy_a, strategy_a_crops]
+  full_plan_probability: 0.6
+  rare_crop_probability: 0.4
+sampling:
+  mode: uniform
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments
+

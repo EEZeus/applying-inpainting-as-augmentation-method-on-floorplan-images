@@ -1,0 +1,15 @@
+id: e1
+method: Oversampling
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [original]
+sampling:
+  mode: rare_weighted
+  lambda: 2.0
+  class_weight_mode: inverse_sqrt
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments
+

@@ -1,0 +1,4 @@
+context_fraction: 1.0
+min_context_fraction: 0.75
+output_size: 512
+include_roles: [primary_rare]

@@ -1,0 +1,79 @@
+seed: 4042
+
+dataset:
+  annotation_file: data/processed/instances_deduplicated.json
+  image_dir: ../area_segmentation_coco/images
+  train_split: data/splits/train.txt
+  rare_classes_file: configs/rare_classes.yaml
+  lora_training_manifest: data/lora_training_semantic_v2/manifest.json
+
+classes:
+  source_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  target_ids: [11, 12, 13, 14, 15, 16]
+
+geometry:
+  tolerance: 0.50
+
+balancing:
+  mode: capped_multiplier
+  multiplier: 3
+  max_target_instances: 20
+
+crop:
+  context_fraction: 1.0
+  output_size: 512
+
+mask:
+  erosion_fraction: 0.02
+  min_erosion_px: 2
+  max_erosion_px: 12
+  structure_protection: true
+  structure_protection_mode: long_lines
+  dark_threshold: auto
+  structure_dilation_px: 2
+  min_mutable_fraction: 0.20
+  min_mutable_fraction_by_category: {}
+
+prompt:
+  template: "architectural technical floor plan room explicitly labeled {category_name}, correct room-specific symbols, replace the existing room function, 2D line drawing"
+  negative_prompt: "photograph, perspective, 3d render, people, dense texture, black fill"
+
+generation:
+  backend: stable_diffusion_inpaint_lora
+  model_name: stable-diffusion-v1-5/stable-diffusion-inpainting
+  model_revision: null
+  cache_dir: data/cache/huggingface
+  lora_path: models/floorplan_lora_semantic_v2
+  lora_weight_name: pytorch_lora_weights.safetensors
+  device: cuda
+  dtype: fp16
+  num_inference_steps: 25
+  guidance_scale: 6.0
+  variants_per_instance: 1
+
+quality:
+  require_zero_outside_changes: true
+  require_zero_boundary_changes: true
+  min_changed_fraction_inside: 0.01
+  min_mean_absolute_change: 1.0
+  min_generated_region_std: 2.0
+  min_source_dark_pixels_for_retention_check: 5
+  max_source_dark_retention_fraction: 0.35
+  max_near_white_fraction_after: 0.995
+  max_dark_fraction_after: 0.50
+  max_dark_fraction_increase: 0.30
+  max_saturated_fraction_after: 0.50
+  max_saturated_fraction_increase: 0.30
+
+output:
+  dataset_dir: data/augmented_lora_semantic_v2
+  qa_dir: outputs/augmentation_lora_semantic_v2
+  decision_audit_csv: outputs/augmentation_lora_semantic_v2/decision_audit.csv
+  augmented_json: data/augmented_lora_semantic_v2/instances_train_augmented.json
+
+qa:
+  max_examples: 60
+  rows_per_sheet: 5
+
+runtime:
+  num_workers: 2

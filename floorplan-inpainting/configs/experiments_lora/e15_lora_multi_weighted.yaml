@@ -1,0 +1,16 @@
+id: e15
+method: LoRA multi-room conversion plus rare-weighted sampling
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [strategy_lora_multi]
+multi_room:
+  replacement_percentage: 5
+  percentage_jitter: 2
+sampling:
+  mode: rare_weighted
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments_lora_multi_semantic_v2

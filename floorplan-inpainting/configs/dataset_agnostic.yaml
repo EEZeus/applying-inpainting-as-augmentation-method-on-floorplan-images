@@ -1,0 +1,6 @@
+annotation_file: data/processed/instances_deduplicated_agnostic.json
+image_dir: ../area_segmentation_coco/images
+split_dir: data/splits
+num_classes: 2
+category_ids: [1]
+class_agnostic: true

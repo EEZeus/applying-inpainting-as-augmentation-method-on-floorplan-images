@@ -1,0 +1,80 @@
+seed: 3042
+
+dataset:
+  annotation_file: data/processed/instances_deduplicated.json
+  image_dir: ../area_segmentation_coco/images
+  train_split: data/splits/train.txt
+  rare_classes_file: configs/rare_classes.yaml
+  output_dir: data/lora_training_semantic_v2
+  manifest: data/lora_training_semantic_v2/manifest.json
+
+crop:
+  context_fraction: 1.0
+  output_size: 512
+
+mask:
+  erosion_fraction: 0.02
+  min_erosion_px: 2
+  max_erosion_px: 12
+  structure_protection: true
+  structure_protection_mode: long_lines
+  dark_threshold: auto
+  structure_dilation_px: 2
+  min_mutable_fraction: 0.10
+
+prompt:
+  template: "architectural technical floor plan room explicitly labeled {category_name}, correct room-specific symbols, 2D line drawing"
+  negative_prompt: "photograph, perspective, 3d render, people, dense texture, black fill"
+
+rare_augmentation:
+  primary_ids: [11, 12, 13, 14, 15, 16]
+  optional_ids: [17, 18]
+  include_optional: true
+  variants_per_primary_instance: 12
+  variants_per_optional_instance: 6
+  # Variants share source_annotation_id and are explicitly not new geometries.
+  transforms:
+    brightness_range: [0.85, 1.15]
+    contrast_range: [0.85, 1.15]
+    grayscale_probability: 0.30
+    blur_probability: 0.30
+    blur_sigma_range: [0.2, 0.8]
+    jpeg_probability: 0.50
+    jpeg_quality_range: [70, 95]
+    noise_probability: 0.60
+    noise_sigma_range: [1.0, 6.0]
+    line_thickness_probability: 0.35
+    affine_probability: 0.50
+    rotation_degrees: 2.0
+    scale_range: [0.97, 1.03]
+    translation_pixels: 4
+
+model:
+  name: stable-diffusion-v1-5/stable-diffusion-inpainting
+  revision: null
+  cache_dir: data/cache/huggingface
+  output_dir: models/floorplan_lora_semantic_v2
+
+training:
+  resolution: 512
+  mixed_precision: fp16
+  train_batch_size: 2
+  gradient_accumulation_steps: 2
+  dataloader_workers: 4
+  max_train_steps: 5000
+  learning_rate: 0.0001
+  lr_scheduler: cosine
+  lr_warmup_steps: 200
+  max_grad_norm: 1.0
+  rank: 8
+  checkpointing_steps: 500
+  logging_steps: 10
+  rare_sampling_multiplier: 3.0
+  optional_sampling_multiplier: 2.0
+
+validation:
+  seed: 73042
+  num_inference_steps: 25
+  guidance_scale: 6.0
+  every_steps: 1000
+  output_dir: outputs/lora_validation_semantic_v2

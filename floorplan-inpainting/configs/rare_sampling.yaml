@@ -1,0 +1,6 @@
+sampling:
+  mode: rare_weighted
+  lambda: 2.0
+  class_weight_mode: inverse_sqrt
+  max_image_weight: 5.0
+  include_roles: [primary_rare]

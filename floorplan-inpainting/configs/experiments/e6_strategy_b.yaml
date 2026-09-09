@@ -1,0 +1,14 @@
+id: e6
+method: Strategy B
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [strategy_b]
+sampling:
+  mode: uniform
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments
+

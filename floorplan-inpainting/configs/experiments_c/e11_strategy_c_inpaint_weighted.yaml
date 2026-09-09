@@ -1,0 +1,13 @@
+id: e11
+method: Strategy C2 - exemplar-seeded inpainting + weighted sampling
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [strategy_c_diffusion_inpaint]
+sampling:
+  mode: rare_weighted
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments_c_multi

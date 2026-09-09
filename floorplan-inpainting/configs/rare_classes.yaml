@@ -1,0 +1,11 @@
+categories:
+  11: {name: "Allg. Verkehrsfläche", role: primary_rare}
+  12: {name: "Abstellraum", role: primary_rare}
+  13: {name: "Versammlungsraum", role: primary_rare}
+  14: {name: "Schacht", role: primary_rare}
+  15: {name: "Garderobe", role: primary_rare}
+  16: {name: "Sanitärraum", role: primary_rare}
+  17: {name: "Werkstatt", role: low_support}
+  18: {name: "Speiseraum", role: low_support}
+  19: {name: "Labor", role: insufficient_for_eval}
+

@@ -1,0 +1,13 @@
+id: e13
+method: LoRA common-to-rare conversion plus rare-weighted sampling - automatic QC
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [strategy_lora_b]
+sampling:
+  mode: rare_weighted
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments_lora

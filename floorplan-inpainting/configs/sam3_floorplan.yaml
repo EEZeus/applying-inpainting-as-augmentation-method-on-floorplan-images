@@ -1,0 +1,309 @@
+# Official SAM 3 single-GPU fine-tuning configuration for floor-plan instances.
+defaults:
+  - _self_
+
+paths:
+  dataset_root: ${oc.env:PWD}/data/sam3_floorplan
+  experiment_log_dir: ${oc.env:PWD}/outputs/sam3_baseline
+  bpe_path: ${oc.env:SAM3_ROOT}/sam3/assets/bpe_simple_vocab_16e6.txt.gz
+  eval_split: val
+
+transforms:
+  train:
+    - _target_: sam3.train.transforms.basic_for_api.ComposeAPI
+      transforms:
+        - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+          query_filter:
+            _target_: sam3.train.transforms.filter_query_transforms.FilterCrowds
+        - _target_: sam3.train.transforms.point_sampling.RandomizeInputBbox
+          box_noise_std: 0.1
+          box_noise_max: 20
+        - _target_: sam3.train.transforms.segmentation.DecodeRle
+        - _target_: sam3.train.transforms.basic_for_api.RandomResizeAPI
+          sizes:
+            _target_: sam3.train.transforms.basic.get_random_resize_scales
+            size: ${scratch.resolution}
+            min_size: 480
+            rounded: false
+          max_size:
+            _target_: sam3.train.transforms.basic.get_random_resize_max_size
+            size: ${scratch.resolution}
+          square: true
+          consistent_transform: false
+        - _target_: sam3.train.transforms.basic_for_api.PadToSizeAPI
+          size: ${scratch.resolution}
+          consistent_transform: false
+        - _target_: sam3.train.transforms.basic_for_api.ToTensorAPI
+        - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+          query_filter:
+            _target_: sam3.train.transforms.filter_query_transforms.FilterEmptyTargets
+        - _target_: sam3.train.transforms.basic_for_api.NormalizeAPI
+          mean: [0.5, 0.5, 0.5]
+          std: [0.5, 0.5, 0.5]
+    - _target_: sam3.train.transforms.filter_query_transforms.FlexibleFilterFindGetQueries
+      query_filter:
+        _target_: sam3.train.transforms.filter_query_transforms.FilterFindQueriesWithTooManyOut
+        max_num_objects: 200
+  val:
+    - _target_: sam3.train.transforms.basic_for_api.ComposeAPI
+      transforms:
+        - _target_: sam3.train.transforms.basic_for_api.RandomResizeAPI
+          sizes: ${scratch.resolution}
+          max_size:
+            _target_: sam3.train.transforms.basic.get_random_resize_max_size
+            size: ${scratch.resolution}
+          square: true
+          consistent_transform: false
+        - _target_: sam3.train.transforms.basic_for_api.ToTensorAPI
+        - _target_: sam3.train.transforms.basic_for_api.NormalizeAPI
+          mean: [0.5, 0.5, 0.5]
+          std: [0.5, 0.5, 0.5]
+
+loss:
+  _target_: sam3.train.loss.sam3_loss.Sam3LossWrapper
+  matcher: ${scratch.matcher}
+  o2m_weight: 2.0
+  o2m_matcher:
+    _target_: sam3.train.matcher.BinaryOneToManyMatcher
+    alpha: 0.3
+    threshold: 0.4
+    topk: 4
+  use_o2m_matcher_on_o2m_aux: false
+  loss_fns_find:
+    - _target_: sam3.train.loss.loss_fns.Boxes
+      weight_dict: {loss_bbox: 5.0, loss_giou: 2.0}
+    - _target_: sam3.train.loss.loss_fns.IABCEMdetr
+      weak_loss: false
+      weight_dict: {loss_ce: 20.0, presence_loss: 20.0}
+      pos_weight: 10.0
+      alpha: 0.25
+      gamma: 2
+      use_presence: true
+      pos_focal: false
+      pad_n_queries: 200
+      pad_scale_pos: 1.0
+    - _target_: sam3.train.loss.loss_fns.Masks
+      focal_alpha: 0.25
+      focal_gamma: 2.0
+      weight_dict: {loss_mask: 200.0, loss_dice: 10.0}
+      compute_aux: false
+  loss_fn_semantic_seg:
+    _target_: sam3.train.loss.loss_fns.SemanticSegCriterion
+    presence_head: true
+    presence_loss: false
+    focal: true
+    focal_alpha: 0.6
+    focal_gamma: 2.0
+    downsample: false
+    weight_dict:
+      loss_semantic_seg: 20.0
+      loss_semantic_presence: 1.0
+      loss_semantic_dice: 30.0
+  scale_by_find_batch_size: true
+
+scratch:
+  resolution: 1008
+  use_presence_eval: true
+  matcher:
+    _target_: sam3.train.matcher.BinaryHungarianMatcherV2
+    focal: true
+    cost_class: 2.0
+    cost_bbox: 5.0
+    cost_giou: 2.0
+    alpha: 0.25
+    gamma: 2
+    stable: false
+  box_postprocessor:
+    _target_: sam3.eval.postprocessors.PostProcessImage
+    max_dets_per_img: -1
+    use_original_ids: true
+    use_original_sizes_box: true
+    use_presence: ${scratch.use_presence_eval}
+  mask_postprocessor:
+    _target_: sam3.eval.postprocessors.PostProcessImage
+    max_dets_per_img: -1
+    iou_type: segm
+    use_original_ids: true
+    use_original_sizes_box: true
+    use_original_sizes_mask: true
+    convert_mask_to_rle: true
+    detection_threshold: 0.3
+    use_presence: ${scratch.use_presence_eval}
+  collate_fn:
+    _target_: sam3.train.data.collator.collate_fn_api
+    _partial_: true
+    repeats: 1
+    dict_key: floorplan
+    with_seg_masks: true
+
+trainer:
+  _target_: sam3.train.trainer.Trainer
+  skip_saving_ckpts: false
+  empty_gpu_mem_cache_after_eval: true
+  skip_first_val: true
+  max_epochs: 20
+  accelerator: cuda
+  seed_value: 42
+  val_epoch_freq: 5
+  mode: train
+  gradient_accumulation_steps: 1
+  distributed:
+    backend: nccl
+    find_unused_parameters: true
+    gradient_as_bucket_view: true
+  loss:
+    all: ${loss}
+    default:
+      _target_: sam3.train.loss.sam3_loss.DummyLoss
+  data:
+    train:
+      _target_: sam3.train.data.torch_dataset.TorchDataset
+      dataset:
+        _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+        transforms: ${transforms.train}
+        load_segmentation: true
+        max_ann_per_img: 500000
+        multiplier: 1
+        max_train_queries: 50000
+        max_val_queries: 50000
+        training: true
+        use_caching: false
+        img_folder: ${paths.dataset_root}/train
+        ann_file: ${paths.dataset_root}/train/_annotations.coco.json
+      shuffle: true
+      batch_size: 1
+      num_workers: 6
+      pin_memory: true
+      drop_last: true
+      collate_fn: ${scratch.collate_fn}
+    val:
+      _target_: sam3.train.data.torch_dataset.TorchDataset
+      dataset:
+        _target_: sam3.train.data.sam3_image_dataset.Sam3ImageDataset
+        load_segmentation: true
+        coco_json_loader:
+          _target_: sam3.train.data.coco_json_loaders.COCO_FROM_JSON
+          include_negatives: true
+          category_chunk_size: 4
+          _partial_: true
+        img_folder: ${paths.dataset_root}/${paths.eval_split}
+        ann_file: ${paths.dataset_root}/${paths.eval_split}/_annotations.coco.json
+        transforms: ${transforms.val}
+        max_ann_per_img: 100000
+        multiplier: 1
+        training: false
+      shuffle: false
+      batch_size: 1
+      num_workers: 4
+      pin_memory: true
+      drop_last: false
+      collate_fn: ${scratch.collate_fn}
+  model:
+    _target_: sam3.model_builder.build_sam3_image_model
+    bpe_path: ${paths.bpe_path}
+    device: cpus
+    eval_mode: false
+    enable_segmentation: true
+  meters:
+    val:
+      floorplan:
+        bbox:
+          _target_: sam3.eval.coco_writer.PredictionDumper
+          iou_type: bbox
+          dump_dir: ${launcher.experiment_log_dir}/dumps/${paths.eval_split}/bbox
+          merge_predictions: true
+          postprocessor: ${scratch.box_postprocessor}
+          gather_pred_via_filesys: false
+          maxdets: 100
+          pred_file_evaluators:
+            - _target_: sam3.eval.coco_eval_offline.CocoEvaluatorOfflineWithPredFileEvaluators
+              gt_path: ${paths.dataset_root}/${paths.eval_split}/_annotations.coco.json
+              tide: false
+              iou_type: bbox
+        mask:
+          _target_: sam3.eval.coco_writer.PredictionDumper
+          iou_type: segm
+          dump_dir: ${launcher.experiment_log_dir}/dumps/${paths.eval_split}/mask
+          merge_predictions: true
+          postprocessor: ${scratch.mask_postprocessor}
+          gather_pred_via_filesys: false
+          maxdets: 100
+          pred_file_evaluators:
+            - _target_: sam3.eval.coco_eval_offline.CocoEvaluatorOfflineWithPredFileEvaluators
+              gt_path: ${paths.dataset_root}/${paths.eval_split}/_annotations.coco.json
+              tide: false
+              iou_type: segm
+  optim:
+    amp: {enabled: true, amp_dtype: float16}
+    optimizer:
+      _target_: torch.optim.AdamW
+    gradient_clip:
+      _target_: sam3.train.optim.optimizer.GradientClipper
+      max_norm: 0.1
+      norm_type: 2
+    param_group_modifiers:
+      - _target_: sam3.train.optim.optimizer.layer_decay_param_modifier
+        _partial_: true
+        layer_decay_value: 0.9
+        apply_to: backbone.vision_backbone.trunk
+        overrides:
+          - {pattern: "*pos_embed*", value: 1.0}
+    options:
+      lr:
+        - scheduler:
+            _target_: sam3.train.optim.schedulers.InverseSquareRootParamScheduler
+            base_lr: 8.0e-5
+            timescale: 20
+            warmup_steps: 20
+            cooldown_steps: 20
+        - scheduler:
+            _target_: sam3.train.optim.schedulers.InverseSquareRootParamScheduler
+            base_lr: 2.5e-5
+            timescale: 20
+            warmup_steps: 20
+            cooldown_steps: 20
+          param_names: ["backbone.vision_backbone.*"]
+        - scheduler:
+            _target_: sam3.train.optim.schedulers.InverseSquareRootParamScheduler
+            base_lr: 5.0e-6
+            timescale: 20
+            warmup_steps: 20
+            cooldown_steps: 20
+          param_names: ["backbone.language_backbone.*"]
+      weight_decay:
+        - scheduler:
+            _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+            value: 0.1
+        - scheduler:
+            _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+            value: 0.0
+          param_names: ["*bias*"]
+          module_cls_names: [torch.nn.LayerNorm]
+  checkpoint:
+    save_dir: ${launcher.experiment_log_dir}/checkpoints
+    save_freq: 0
+  logging:
+    tensorboard_writer:
+      _target_: sam3.train.utils.logger.make_tensorboard_logger
+      log_dir: ${launcher.experiment_log_dir}/tensorboard
+      flush_secs: 120
+      should_log: true
+    wandb_writer: null
+    log_dir: ${launcher.experiment_log_dir}/logs
+    log_freq: 5
+
+launcher:
+  num_nodes: 1
+  gpus_per_node: 1
+  experiment_log_dir: ${paths.experiment_log_dir}
+  multiprocessing_context: spawn
+
+submitit:
+  account: null
+  partition: null
+  qos: null
+  timeout_hour: 24
+  use_cluster: false
+  cpus_per_task: 8
+  port_range: [10000, 65000]
+  constraint: null

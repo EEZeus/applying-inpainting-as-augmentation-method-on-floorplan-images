@@ -1,0 +1,2 @@
+# Dataset stored beside the source tree. Keep it on persistent storage, not Git.
+/area_segmentation_coco/

@@ -1,0 +1,76 @@
+seed: 6042
+dataset:
+  annotation_file: data/processed/instances_deduplicated.json
+  image_dir: ../area_segmentation_coco/images
+  train_split: data/splits/train.txt
+  rare_classes_file: configs/rare_classes.yaml
+classes:
+  source_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  target_ids: [11, 12, 13, 14, 15, 16]
+geometry:
+  tolerance: 0.50
+selection:
+  max_donor_reuse: 4
+balancing:
+  mode: capped_multiplier
+  multiplier: 3
+  max_target_instances: 20
+crop:
+  context_fraction: 1.0
+  output_size: 512
+mask:
+  erosion_fraction: 0.02
+  min_erosion_px: 2
+  max_erosion_px: 12
+  structure_protection: false
+  dark_threshold: auto
+  structure_dilation_px: 0
+  min_mutable_fraction: 0.20
+  min_mutable_fraction_by_category: {}
+integration:
+  feather_pixels: 5
+  seam_width_pixels: 6
+prompt:
+  template: >-
+    architectural technical floor plan room explicitly labeled {category_name},
+    harmonize the provided genuine rare-room exemplar and preserve its technical symbols
+  negative_prompt: >-
+    photorealistic, 3d render, perspective, people, random text, illegible text,
+    dense texture, black fill, colored noise, office, Büro
+generation:
+  backend: stable_diffusion_inpaint_lora
+  model_name: stable-diffusion-v1-5/stable-diffusion-inpainting
+  model_revision: null
+  cache_dir: data/cache/huggingface
+  lora_path: models/floorplan_lora_semantic_v2
+  lora_weight_name: pytorch_lora_weights.safetensors
+  device: cuda
+  dtype: fp16
+  num_inference_steps: 25
+  guidance_scale: 5.0
+  strength: 0.30
+  variants_per_instance: 1
+quality:
+  require_zero_outside_changes: true
+  require_zero_boundary_changes: true
+  min_changed_fraction_inside: 0.01
+  min_mean_absolute_change: 1.0
+  min_generated_region_std: 2.0
+  max_near_white_fraction_after: 0.995
+  max_dark_fraction_after: 0.70
+  max_dark_fraction_increase: 0.50
+  max_saturated_fraction_after: 0.60
+  max_saturated_fraction_increase: 0.40
+semantic_quality:
+  min_donor_coverage_fraction: 0.50
+  min_donor_dark_pixels: 10
+  min_dark_retention_fraction: 0.95
+  dark_tolerance: 15
+output:
+  dataset_dir: data/augmented_lora_exemplar_v2
+  qa_dir: outputs/augmentation_lora_exemplar_v2
+qa:
+  max_examples: 60
+  rows_per_sheet: 5
+runtime:
+  num_workers: 2

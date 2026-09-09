@@ -1,0 +1,13 @@
+id: e9
+method: Strategy C1 - rare exemplar feather blend
+base_model_config: configs/baseline.yaml
+tracks: [multiclass, agnostic]
+dataset:
+  sources: [strategy_c_feather_blend]
+sampling:
+  mode: uniform
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+output_root: outputs/experiments_c_multi

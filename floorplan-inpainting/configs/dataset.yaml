@@ -1,0 +1,6 @@
+annotation_file: data/processed/instances_deduplicated.json
+image_dir: ../area_segmentation_coco/images
+split_dir: data/splits
+num_classes: 20
+category_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+
