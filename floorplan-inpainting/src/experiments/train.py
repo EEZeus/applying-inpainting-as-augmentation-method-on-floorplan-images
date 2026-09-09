@@ -16,7 +16,7 @@ from src.experiments.data import (build_epoch_sampler, build_training_dataset,
                                   original_train_counts)
 from src.models.mask_rcnn import build_mask_rcnn
 from src.training.engine import predict_coco, train_one_epoch
-from src.utils.config import load_yaml, resolve_path
+from src.utils.config import load_yaml, resolve_path, split_dir
 from src.utils.reproducibility import seed_everything
 
 
@@ -104,7 +104,7 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
 
     evaluation_dataset_cfg = load_yaml(resolve_path(
         "configs/dataset_agnostic.yaml" if class_agnostic else "configs/dataset.yaml"))
-    val_ids = read_split(resolve_path(evaluation_dataset_cfg["split_dir"]) / "val.txt")
+    val_ids = read_split(split_dir(evaluation_dataset_cfg["split_dir"]) / "val.txt")
     val_dataset = FloorplanCocoDataset(resolve_path(evaluation_dataset_cfg["image_dir"]),
                                        resolve_path(evaluation_dataset_cfg["annotation_file"]), val_ids,
                                        DetectionTransform())

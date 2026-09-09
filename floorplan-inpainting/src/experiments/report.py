@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from src.data.coco_dataset import read_split
-from src.utils.config import resolve_path
+from src.utils.config import resolve_path, split_dir
 
 
 METHODS = {
@@ -99,7 +99,7 @@ def generate_final_report(experiment_root="outputs/experiments", output_dir="out
     experiment_root, output_dir = resolve_path(experiment_root), resolve_path(output_dir)
     figures = output_dir / "figures"; figures.mkdir(parents=True, exist_ok=True)
     original = json.loads(resolve_path("data/processed/instances_deduplicated.json").read_text())
-    train_ids, test_ids = (set(read_split(resolve_path(f"data/splits/{name}.txt"))) for name in ("train", "test"))
+    train_ids, test_ids = (set(read_split(split_dir() / f"{name}.txt")) for name in ("train", "test"))
     categories = {c["id"]: c["name"] for c in original["categories"]}
     train_counts = Counter(a["category_id"] for a in original["annotations"] if a["image_id"] in train_ids)
     test_counts = Counter(a["category_id"] for a in original["annotations"] if a["image_id"] in test_ids)

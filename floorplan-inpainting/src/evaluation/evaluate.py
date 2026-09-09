@@ -12,12 +12,12 @@ from src.evaluation.coco_eval import compact_predictions, evaluate_coco_results
 from src.evaluation.per_class_metrics import per_class_mask_metrics, rare_aggregate_metrics
 from src.models.mask_rcnn import build_mask_rcnn
 from src.training.engine import predict_coco
-from src.utils.config import load_yaml, resolve_path
+from src.utils.config import load_yaml, resolve_path, split_dir
 
 
 def evaluate_checkpoint(dataset_cfg, model_cfg, rare_cfg, checkpoint, split="test", output_dir="outputs/metrics"):
     annotation_file = resolve_path(dataset_cfg["annotation_file"])
-    ids = read_split(resolve_path(dataset_cfg["split_dir"]) / f"{split}.txt")
+    ids = read_split(split_dir(dataset_cfg["split_dir"]) / f"{split}.txt")
     dataset = FloorplanCocoDataset(resolve_path(dataset_cfg["image_dir"]), annotation_file, ids, DetectionTransform())
     category_ids = sorted(category["id"] for category in dataset.coco_data["categories"])
     if category_ids != dataset_cfg["category_ids"] or dataset_cfg["num_classes"] != len(category_ids) + 1:

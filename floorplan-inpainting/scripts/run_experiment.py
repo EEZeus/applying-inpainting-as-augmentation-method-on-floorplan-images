@@ -13,7 +13,7 @@ from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform
 from src.experiments.train import train_experiment
 from src.utils.config import load_yaml
-from src.utils.config import resolve_path
+from src.utils.config import resolve_path, split_dir
 from src.visualization.predictions import render_prediction_comparisons
 
 
@@ -24,12 +24,43 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--output-root",
+                        help="override experiment output_root (e.g. outputs/cv/fold3); "
+                             "used by the CV array together with FP_SPLIT_DIR")
+    parser.add_argument("--eval-checkpoint",
+                        help="evaluate this best.pth on the (FP_SPLIT_DIR) split and exit; "
+                             "no training. Used by the rotated held-out CV eval.")
+    parser.add_argument("--eval-split", default="test", choices=["val", "test"])
+    parser.add_argument("--eval-tag", default="eval",
+                        help="subdir name under output_root/<track>/<id>/ for eval-only results")
     parser.add_argument("--replacement-percentage", type=float,
                         help="E14/E15 target percentage of common rooms changed per synthetic plan")
     parser.add_argument("--percentage-jitter", type=float,
                         help="E14/E15 uniform ± percentage-point randomness")
     args = parser.parse_args()
     experiment = load_yaml(args.config)
+    if args.output_root:
+        experiment["output_root"] = args.output_root
+
+    if args.eval_checkpoint:
+        checkpoint = Path(args.eval_checkpoint).resolve()
+        if not checkpoint.is_file():
+            raise FileNotFoundError(f"--eval-checkpoint does not exist: {checkpoint}")
+        model_cfg = load_yaml(resolve_path(experiment.get("base_model_config", "configs/baseline.yaml")))
+        dataset_cfg = load_yaml(resolve_path(
+            "configs/dataset_agnostic.yaml" if args.track == "agnostic" else "configs/dataset.yaml"))
+        rare_cfg = None if args.track == "agnostic" else load_yaml(ROOT / "configs/rare_classes.yaml")
+        out_dir = resolve_path(experiment["output_root"]) / args.track / experiment["id"] / args.eval_tag
+        out_dir.mkdir(parents=True, exist_ok=True)
+        metrics, rows, _ = evaluate_checkpoint(
+            dataset_cfg, model_cfg, rare_cfg, checkpoint, args.eval_split, out_dir / "metrics")
+        result = {"mode": "eval_only", "eval_checkpoint": str(checkpoint),
+                  "eval_split": args.eval_split, "test_metrics": metrics, "per_class": rows}
+        (out_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps({"eval_checkpoint": str(checkpoint), "eval_split": args.eval_split,
+                          "test_metrics": metrics}, ensure_ascii=False, indent=2))
+        return
+
     if experiment["id"] in {"e14", "e15"}:
         policy = experiment["multi_room"]
         percentage = float(policy["replacement_percentage"] if args.replacement_percentage is None else args.replacement_percentage)
@@ -57,7 +88,7 @@ def main():
     rare_cfg = None if args.track == "agnostic" else load_yaml(ROOT / "configs/rare_classes.yaml")
     metrics, rows, predictions = evaluate_checkpoint(
         dataset_cfg, model_cfg, rare_cfg, checkpoint, "test", output_dir / "metrics")
-    test_ids = read_split(resolve_path(dataset_cfg["split_dir"]) / "test.txt")
+    test_ids = read_split(split_dir(dataset_cfg["split_dir"]) / "test.txt")
     test_dataset = FloorplanCocoDataset(resolve_path(dataset_cfg["image_dir"]),
                                         resolve_path(dataset_cfg["annotation_file"]), test_ids,
                                         DetectionTransform())

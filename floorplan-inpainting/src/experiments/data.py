@@ -1,5 +1,6 @@
 """Training datasets and samplers for the controlled Phase 3 matrix."""
 import json
+import os
 from collections import Counter, defaultdict
 
 import numpy as np
@@ -9,7 +10,7 @@ from torch.utils.data import ConcatDataset, Dataset, RandomSampler, WeightedRand
 
 from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform
-from src.utils.config import resolve_path
+from src.utils.config import resolve_path, split_dir
 
 
 SOURCE_FILES = {
@@ -88,12 +89,21 @@ class ExperimentCocoDataset(Dataset):
         original = json.loads(resolve_path(SOURCE_FILES["original"][0]).read_text(encoding="utf-8"))
         self.target_annotation_ids = _target_annotation_ids(self.coco, original)
         frozen_train = set(map(int, image_ids))
+        # Cross-validation: the synthetic sets were generated from the original
+        # 70/15/15 train split, so under a CV fold some synthetic images derive
+        # from images now in this fold's val/test. Dropping them (rather than
+        # raising) is the leakage-safe behaviour: train only on synthetic whose
+        # source image is in the current train split. Unset -> original strict
+        # behaviour, so every non-CV run is byte-identical.
+        drop_out_of_fold = bool(os.environ.get("FP_CV_DROP_OOF_SYNTHETIC"))
         selected = []
         for info in self.coco["images"]:
             source_id = int(info.get("source_image_id", info["id"]))
             if source_id in frozen_train:
                 selected.append(info)
             elif info.get("synthetic") or source_name != "original":
+                if drop_out_of_fold:
+                    continue
                 raise ValueError(f"{source_name} contains image derived outside frozen train split: {source_id}")
         self.images = sorted(selected, key=lambda item: item["id"])
         allowed = {info["id"] for info in self.images}
@@ -155,7 +165,7 @@ class ExperimentCocoDataset(Dataset):
 
 
 def build_training_dataset(experiment_cfg, model_cfg, class_agnostic=False):
-    train_ids = read_split(resolve_path("data/splits/train.txt"))
+    train_ids = read_split(split_dir() / "train.txt")
     transform = DetectionTransform(True, model_cfg["horizontal_flip_probability"],
                                    model_cfg["brightness"], model_cfg["contrast"])
     sources = experiment_cfg["dataset"]["sources"]
@@ -208,5 +218,5 @@ def build_epoch_sampler(records, experiment_cfg, seed, samples_per_epoch, origin
 
 def original_train_counts():
     coco = json.loads(resolve_path(SOURCE_FILES["original"][0]).read_text(encoding="utf-8"))
-    train_ids = set(read_split(resolve_path("data/splits/train.txt")))
+    train_ids = set(read_split(split_dir() / "train.txt"))
     return Counter(a["category_id"] for a in coco["annotations"] if a["image_id"] in train_ids)
