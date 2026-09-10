@@ -1,230 +1,219 @@
 \section{Literature Review}
 
 The reading for this project covered three strands: what is known about
-augmenting instance segmentation, what is known about using generative models to
-fill a long tail, and what the floor-plan and foundation-model literature offers
-as backbones and datasets. Each paper below is summarised with its venue,
-availability of code and data, method, main finding, and a comment on what it
-implied for the design of this project.
+augmenting instance segmentation, what is known about filling a long tail with
+generative models, and what the floor-plan literature offers as backbones and
+datasets. Each paper below is summarised with its venue, the availability of
+code and data, the method, the main finding, and a comment on how it shaped the
+project.
 
 \paragraph{Ghiasi et al., ``Simple Copy-Paste is a Strong Data Augmentation
-Method for Instance Segmentation'' (CVPR 2021)
-\cite{ghiasi2021copypaste}.} Code is released inside the TensorFlow TPU model
-repository; the paper uses public COCO and LVIS data. The method is deliberately
-minimal: instance masks are cut from one training image and pasted at random
-scale and position into another, with no blending model and no attempt to make
-the composite photometrically consistent. On COCO the authors report $+1.0$ box
-AP over a strong baseline, and on LVIS the gain concentrates in the rare
-categories ($+6.1$ mask AP for rare classes), while remaining complementary to a
-long-tail loss. The finding that a crude, generator-free pixel transplant
-outperforms more sophisticated composition is the single most influential result
-for this project: it motivated including direct copy-paste as an explicit control
-arm (e8) rather than only as an ablation, and that arm turned out to be the only
-augmentation with a consistent positive sign in our own measurements.
+Method for Instance Segmentation'' (CVPR 2021) \cite{ghiasi2021copypaste}.}
+Code is released inside the TensorFlow TPU model repository, and the experiments
+use public COCO and LVIS data. The method is deliberately minimal. Instance
+masks are cut from one training image and pasted at random scale and position
+into another, with no blending model and no attempt to make the composite
+photometrically consistent. On COCO the authors report $+1.0$ box AP over a
+strong baseline. On LVIS the gain concentrates in the rare categories, at
+$+6.1$ mask AP, and remains complementary to a long-tail loss. That a crude
+pixel transplant outperforms more sophisticated composition was the single most
+influential result for this project. It motivated including direct copy-paste as
+an explicit control arm rather than only as an ablation, and that arm turned out
+to be the only augmentation with a consistent positive sign in our own
+measurements.
 
 \paragraph{Xie et al., ``MosaicFusion: Diffusion Models as Data Augmenters for
 Large Vocabulary Instance Segmentation'' (IJCV 2024; arXiv:2309.13042)
 \cite{xie2024mosaicfusion}.} Code and generated data are public at
-\url{https://github.com/Jiahao000/MosaicFusion}. The method is training-free: an
-off-the-shelf text-to-image diffusion model generates a canvas divided into
-regions, each conditioned on a different category prompt, and the instance masks
-are read out of the cross-attention maps rather than annotated. On LVIS the
-authors report consistent gains for rare and common categories with several
-detector architectures. The paper establishes the strongest form of the
-hypothesis this project set out to test --- that a general-purpose diffusion
-model can manufacture usable training instances for categories the detector has
-barely seen. The critical difference in our setting is domain: MosaicFusion
-operates on natural images, where the pretrained diffusion prior is a good model
-of the data distribution, whereas a floor plan is line art the base model was
-never trained to draw. Our results suggest that difference is decisive.
+\url{https://github.com/Jiahao000/MosaicFusion}. The method needs no training.
+An off-the-shelf diffusion model generates a canvas divided into regions, each
+conditioned on a different category prompt, and the instance masks are read out
+of the cross-attention maps rather than annotated by hand. On LVIS the authors
+report consistent gains for rare and common categories across several detector
+architectures. This paper states the strongest form of the hypothesis the
+project set out to test, that a general-purpose diffusion model can manufacture
+usable training instances for categories a detector has barely seen. The
+critical difference in our setting is domain. MosaicFusion operates on natural
+images, where the pretrained prior models the data well, whereas a floor plan is
+line art the base model was never trained to draw. Our results suggest that
+difference decides the outcome.
 
 \paragraph{Shin et al., ``Fill-Up: Balancing Long-Tailed Data with Generative
 Models'' (arXiv:2306.07200, 2023) \cite{shin2023fillup}.} Code and a project
 page are available at \url{https://alex4727.github.io/Fill-Up/}. Rather than
-prompting a frozen model with class names, the authors learn a textual-inversion
-token per tail category from the few real examples available, then generate
-synthetic images from that token until the class distribution is balanced. They
+prompting a frozen model with class names, the authors learn a
+textual-inversion token per tail category from the few real examples available,
+then generate from that token until the class distribution is balanced. They
 report that the inverted tokens align the synthetic images with the real domain
 far better than plain prompts, and that filling the tail this way reaches
-state-of-the-art results on standard long-tailed classification benchmarks when
-combined with existing long-tail techniques. The paper is the direct argument for
-the LoRA branch of this project: if plain prompting fails to place a class in the
-right visual domain, then adapting the generator to the domain should fix it.
-Our LoRA arms tested that argument on floor plans and did not reproduce the
-benefit, which is worth stating precisely because the reasoning is sound and the
-prior evidence is positive.
+state-of-the-art results on long-tailed classification benchmarks. The paper is
+the direct argument for the LoRA branch of this project. If plain prompting
+fails to place a class in the right visual domain, then adapting the generator
+to the domain should fix it. Our LoRA arms tested that argument on floor plans
+and did not reproduce the benefit, which is worth stating precisely because the
+reasoning is sound and the prior evidence is positive.
 
 \paragraph{Wang et al., ``Domain Gap Embeddings for Generative Dataset
 Augmentation'' (CVPR 2024) \cite{wang2024doge}.} Code is at
 \url{https://github.com/humansensinglab/DoGE}. The method extracts the
 difference between a source and a desired data distribution as a latent
-embedding, then uses that embedding to steer a frozen generative model, avoiding
-per-dataset fine-tuning entirely. It is evaluated under subpopulation shift and
-three few-shot domain-adaptation scenarios, improving over both classical
-augmentation and fine-tuned generative augmentation. The relevant lesson is
-diagnostic: DoGE is built around the observation that generative augmentation
-underperforms precisely when the target distribution is far from the generator's
-own, which is a good description of the failure mode we observed. It also
-suggests the most plausible next step for this project, since the method needs no
-adapter training and would be applicable to a 30-example tail.
+embedding, then uses that embedding to steer a frozen generative model, which
+avoids fine-tuning per dataset. It is evaluated under subpopulation shift and
+three few-shot adaptation scenarios, improving over both classical augmentation
+and fine-tuned generative augmentation. The useful lesson is diagnostic. DoGE is
+built around the observation that generative augmentation underperforms exactly
+when the target distribution sits far from the generator's own, which describes
+the failure mode we observed. It also suggests a plausible next step, since the
+method needs no adapter training and would apply to a 30-example tail.
 
 \paragraph{Huang et al., ``Gen-n-Val: Agentic Image Data Generation and
 Validation'' (arXiv:2506.04676, 2025; CVPR 2026 Findings)
 \cite{huang2025gennval}.} Code is linked from the arXiv page. The method wraps
-layer-diffusion generation in an agentic loop in which a large language model
-writes and revises the prompts and a vision-language model validates each
-generated instance mask before it is admitted to the training set. The reported
-headline is that the proportion of invalid synthetic samples drops from roughly
-50\% to 7\%, with corresponding gains on rare-class instance segmentation and
-open-vocabulary detection. The paper is the clearest statement in the recent
-literature that the bottleneck in generative augmentation is acceptance, not
-generation. Our own pipeline enforces acceptance through deterministic raster
-checks --- exact invariance outside the edited region, retention of donor
-strokes, pixel-statistics thresholds --- which certify structural safety but
-cannot certify that the generated interior \emph{means} the requested room type.
-Gen-n-Val's semantic validator is the component we lacked, and its absence is a
+layer-diffusion generation in an agentic loop where a language model writes and
+revises the prompts and a vision-language model validates each generated
+instance mask before it is admitted. The headline is that the proportion of
+invalid synthetic samples drops from roughly 50\% to 7\%, with corresponding
+gains on rare-class instance segmentation. This is the clearest recent statement
+that the bottleneck in generative augmentation is acceptance rather than
+generation. Our pipeline enforces acceptance through deterministic raster
+checks, which certify structural safety but cannot certify that a generated
+interior means the requested room type. The semantic validator we lacked is a
 candidate explanation for our null result.
 
 \paragraph{Song et al., ``TMI: Text-to-Image Meets Image-to-Image for
 Complementary Data Synthesis to Boost Long-Tailed Instance Segmentation''
 (arXiv:2607.08201, 2026; ECCV 2026) \cite{song2026tmi}.} Code is linked from the
-arXiv page. The method combines two synthesis routes that fail differently:
-text-to-image generation, which produces diverse instances but with weak
-correspondence to a usable mask, and image-to-image translation of existing
-annotated instances, which preserves the mask but produces little diversity. The
-authors show the two are complementary on long-tailed instance-segmentation
-benchmarks and that using either alone leaves most of the benefit unrealised.
-This maps almost exactly onto the axis explored in our Strategy A/B (prompt-driven,
-diverse, semantically unanchored) versus Strategy C (exemplar-driven,
-mask-faithful, low-diversity) arms, and it predicts that neither family should
-work well alone --- which is what we measured, although our experiment does not
-include the combination the paper recommends.
+arXiv page. The method combines two synthesis routes that fail differently.
+Text-to-image generation produces diverse instances with weak correspondence to
+a usable mask, while image-to-image translation of existing annotated instances
+preserves the mask but produces little diversity. The authors show the two are
+complementary on long-tailed benchmarks and that either alone leaves most of the
+benefit unrealised. This maps closely onto the axis explored in our Strategy A
+and B arms, which are prompt-driven and semantically unanchored, versus Strategy
+C, which is exemplar-driven and mask-faithful. The paper predicts that neither
+family should work well alone, which is what we measured, although our
+experiment does not include the combination it recommends.
 
 \paragraph{Wang et al., ``Seesaw Loss for Long-Tailed Instance Segmentation''
 (CVPR 2021) \cite{wang2021seesaw}.} Code is in MMDetection. Instead of adding
 data, the method rebalances the classification loss with two multiplicative
-factors: a mitigation factor that suppresses gradients a frequent class exerts on
-a rare one, and a compensation factor that increases the penalty for
-misclassifying a rare instance. It reaches a substantial rare-AP improvement on
-LVIS with no change to the data pipeline. The paper is the strongest reminder
-that data synthesis is not the only lever, and that a loss-side treatment is far
-cheaper than a diffusion pipeline. Given our finding that the classification
-stage, not the localisation stage, is the failure point, a Seesaw-style loss is
-arguably the intervention this project should have tried first, and it is the
-main untested alternative for future work.
+factors. A mitigation factor suppresses the gradients a frequent class exerts on
+a rare one, and a compensation factor increases the penalty for misclassifying a
+rare instance. It reaches a substantial rare-AP improvement on LVIS with no
+change to the data pipeline. The paper is a reminder that data synthesis is not
+the only lever available, and that a loss-side treatment is far cheaper than a
+diffusion pipeline. Given our finding that classification rather than
+localisation is the failure point, a Seesaw-style loss is arguably the
+intervention this project should have tried first. It remains the main untested
+alternative.
 
 \paragraph{Gupta et al., ``LVIS: A Dataset for Large Vocabulary Instance
-Segmentation'' (CVPR 2019) \cite{gupta2019lvis}.} Data and evaluation code are at
-\url{https://www.lvisdataset.org/}. LVIS introduced the frequent/common/rare
-split protocol and the federated annotation scheme that every long-tail
-instance-segmentation paper above evaluates against. It matters here mainly as a
-scale reference: LVIS defines ``rare'' as fewer than 10 training images per
-category across a set of 100k images, whereas our rare categories have 3--8
-training instances in a set of 35 images. The methods surveyed above are
-therefore validated in a regime that has two to three orders of magnitude more
-data than ours, which is a caution the results section returns to.
+Segmentation'' (CVPR 2019) \cite{gupta2019lvis}.} Data and evaluation code are
+at \url{https://www.lvisdataset.org/}. LVIS introduced the frequent, common and
+rare split protocol that every long-tail paper above evaluates against. It
+matters here mainly as a scale reference. LVIS calls a category rare when it
+appears in fewer than 10 images out of roughly 100k, whereas our rare categories
+have 3--8 training instances across 35 images. The methods surveyed above are
+validated in a regime with two to three orders of magnitude more data, a caution
+the results section returns to.
 
 \paragraph{Kalervo et al., ``CubiCasa5K: A Dataset and an Improved Multi-Task
 Model for Floorplan Image Analysis'' (SCIA 2019)
 \cite{kalervo2019cubicasa5k}.} Data and code are at
 \url{https://github.com/CubiCasa/CubiCasa5k}. The paper contributes 5000
-annotated Finnish residential floor plans over more than 80 object categories and
-a multi-task network that predicts room segmentation, icon segmentation and wall
-heatmaps from a shared encoder. It remains the standard reference dataset for
-raster floor-plan parsing. Its relevance here is as a contrast: CubiCasa5K's room
-classes are residential and visually distinctive, its scale is two orders of
-magnitude above ours, and its plans follow a consistent drawing convention. Our
-dataset shares none of those properties, which is why transferring published
-architectures was never expected to be sufficient on its own.
+annotated Finnish residential floor plans over more than 80 object categories,
+together with a multi-task network that predicts room segmentation, icon
+segmentation and wall heatmaps from a shared encoder. It remains the standard
+reference dataset for raster floor-plan parsing. Its relevance here is as a
+contrast. The CubiCasa5K room classes are residential and visually distinctive,
+its scale is two orders of magnitude above ours, and its plans follow a
+consistent drawing convention. Our dataset shares none of those properties,
+which is why transferring published architectures was never expected to suffice
+on its own.
 
 \paragraph{Kratochvila et al., ``Recognizing and Reconstructing a Multi-Unit
 Floor Plan'' (arXiv:2408.01526, 2024) \cite{kratochvila2024multiunit}.} The
-paper addresses raster multi-unit plans directly, comparing U-Net variants
-(MDA-UNet, MACU-Net) for pixel-wise segmentation of floor-plan structure and
-reporting an F1 around 0.86 on their target elements, followed by a
-vectorisation step. It is the closest recent work to our input domain, and it is
-informative for two reasons. First, it confirms that structural elements ---
-walls and room boundaries --- are the tractable part of the problem, which
-matches our class-agnostic AP of 0.59--0.71. Second, it does not attempt
-fine-grained functional room typing over a long tail, which is the part we found
-to be the hard one, so it offers no evidence that the harder task is reachable at
-our scale.
+paper addresses raster multi-unit plans directly, comparing U-Net variants for
+pixel-wise segmentation of floor-plan structure and reporting an F1 around 0.86
+on their target elements, followed by a vectorisation step. It is the closest
+recent work to our input domain and is informative for two reasons. It confirms
+that walls and room boundaries are the tractable part of the problem, matching
+our class-agnostic AP of 0.59--0.71. It also does not attempt fine-grained
+functional room typing over a long tail, which is the part we found hard, so it
+offers no evidence that the harder task is reachable at our scale.
 
 \paragraph{Ganon et al., ``WAFFLE: Multimodal Floorplan Understanding in the
 Wild'' (arXiv:2412.00955; WACV 2025) \cite{ganon2025waffle}.} Data and code are
 at \url{https://tau-vailab.github.io/WAFFLE/}. The authors assemble roughly 20k
 floor plans scraped from the web, spanning building types, drawing conventions
 and languages, and use large language and vision-language models to extract
-semantic labels from the heterogeneous text on the drawings. They demonstrate
-semantic floor-plan tasks that single-convention datasets cannot support. The
-paper is the closest published example of foundation models being applied to
-architectural floor plans in a few-shot manner, and it points at a resource this
-project did not use: our plans carry printed German room labels
-(``B\"uro'', ``Technik'') that a text-reading model could exploit directly. Given
-that our vision-only classifier reached zero rare recall, reading the drawing's
-own text is probably a stronger signal than anything a diffusion model can add.
+semantic labels from the heterogeneous text printed on the drawings. They
+demonstrate tasks that single-convention datasets cannot support. This is the
+closest published example of foundation models applied to architectural floor
+plans in a few-shot manner, and it points at a resource this project did not
+use. Our plans carry printed German room labels such as ``B\"uro'' and
+``Technik'' that a text-reading model could exploit directly. Since our
+vision-only classifier reached zero rare recall, reading the drawing's own text
+is probably a stronger signal than anything a diffusion model can add.
 
 \paragraph{Carion et al., ``SAM 3: Segment Anything with Concepts''
 (arXiv:2511.16719, 2025) \cite{carion2025sam3}.} Code and weights are at
 \url{https://github.com/facebookresearch/sam3}, gated on Hugging Face. SAM 3
-extends promptable segmentation to \emph{concept} prompts: a short noun phrase
-retrieves and segments all matching instances in an image, backed by a detector
-with a presence head that decouples ``is this concept present'' from ``where is
-it''. The model and its official trainer are the reason Goal 3 was feasible at
-all --- fine-tuning it on 35 images with 19 German category names as text
-concepts required a configuration change rather than a new architecture. In our
-experiments it delivered the single largest effect measured in the project, which
-reframed the augmentation question as a second-order one.
+extends promptable segmentation to concept prompts, where a short noun phrase
+retrieves and segments all matching instances in an image. A presence head
+decouples whether a concept is present from where it is. The model and its
+official trainer are the reason Goal 3 was feasible at all, since fine-tuning on
+35 images with 19 German category names as text concepts needed a configuration
+change rather than a new architecture. In our experiments it delivered the
+largest effect measured in the project, which reframed the augmentation question
+as a second-order one.
 
 \paragraph{Oquab et al., ``DINOv2: Learning Robust Visual Features without
 Supervision'' (TMLR 2024; arXiv:2304.07193) \cite{oquab2024dinov2}.} Code and
-weights are at \url{https://github.com/facebookresearch/dinov2}. The paper
-trains ViT backbones by self-distillation on a curated 142M-image corpus and
-shows that the resulting frozen features support linear-probe classification,
-depth estimation and segmentation at a level previously requiring supervised
-fine-tuning. The practical claim exploited in Goal 4 is that a linear head on
-frozen features is competitive when labelled data is scarce, which is exactly our
-regime. The pretraining corpus is natural images, however, and our result ---
-0.45 top-1 over 19 classes and zero recall on all six rare classes --- suggests
-the frozen features do not separate functional room types in line-art drawings.
+weights are at \url{https://github.com/facebookresearch/dinov2}. The authors
+train ViT backbones by self-distillation on a curated 142M-image corpus and show
+that the resulting frozen features support linear-probe classification, depth
+estimation and segmentation at a level that previously required supervised
+fine-tuning. The claim exploited in Goal 4 is that a linear head on frozen
+features stays competitive when labelled data is scarce, which is our regime.
+The pretraining corpus is natural images, however, and our result of 0.45 top-1
+over 19 classes with zero recall on all six rare classes suggests the frozen
+features do not separate functional room types in line-art drawings.
 
 \paragraph{Zhuo et al., ``UINO-FSS: Unifying Representation Learning and
 Few-Shot Segmentation via Hierarchical Distillation and Mamba-HyperCorrelation''
 (arXiv:2504.15669, 2025) \cite{zhuo2025uinofss}.} The authors observe that
 early-stage DINOv2 features are distributionally consistent with SAM's output
-embeddings, and exploit this to distil a single backbone that serves both
+embeddings, and exploit this to distil a single backbone serving both
 representation learning and few-shot segmentation, reporting mIoU gains of
-3.8--4.1 points on standard few-shot benchmarks. The paper is the strongest
-recent evidence that a frozen DINOv2 encoder is a viable few-shot segmentation
-substrate, and it is the reason we tested a frozen encoder rather than
-fine-tuning one. Its benchmarks (PASCAL-$5^i$, COCO-$20^i$) use natural-image
-classes with clear appearance signatures, which the negative outcome of our
-Goal 4 experiment suggests is a load-bearing assumption.
+3.8--4.1 points. This is the strongest recent evidence that a frozen DINOv2
+encoder is a viable few-shot segmentation substrate, and it is why we tested a
+frozen encoder instead of fine-tuning one. Its benchmarks use natural-image
+classes with clear appearance signatures, an assumption the negative outcome of
+our Goal 4 experiment suggests is load-bearing.
 
 \paragraph{Rombach et al., ``High-Resolution Image Synthesis with Latent
 Diffusion Models'' (CVPR 2022) \cite{rombach2022ldm}.} Code is at
 \url{https://github.com/CompVis/latent-diffusion} and the derived Stable
 Diffusion 1.5 inpainting checkpoint is on Hugging Face. Running the diffusion
 process in the latent space of a pretrained autoencoder rather than in pixel
-space makes high-resolution synthesis and inpainting tractable on a single GPU,
-and the inpainting variant conditions the denoiser on a mask and the masked
-image through a nine-channel input. This is the generator used by every
-diffusion arm in this project. The paper's own inpainting demonstrations are
-photographic, and the qualitative failures we observed --- perspective furniture
-and photographic texture rendered inside a 2D line drawing, visible in
-Figures~\ref{fig:qastrategya} and \ref{fig:loraval} --- are consistent with a
-prior that has essentially no floor-plan mass.
+space makes high-resolution synthesis and inpainting tractable on a single GPU.
+The inpainting variant conditions the denoiser on a mask and the masked image.
+This is the generator behind every diffusion arm in this project. The paper's
+own inpainting demonstrations are photographic, and the failures we observed,
+where perspective furniture and photographic texture appear inside a 2D line
+drawing, are consistent with a prior that has almost no floor-plan mass. They
+are visible in Figures~\ref{fig:qastrategya} and \ref{fig:loraval}.
 
 \paragraph{Hu et al., ``LoRA: Low-Rank Adaptation of Large Language Models''
 (ICLR 2022) \cite{hu2022lora}.} Code is at
 \url{https://github.com/microsoft/LoRA}. The method freezes the pretrained
-weights and learns a low-rank update $BA$ for selected projection matrices,
-reducing trainable parameters by orders of magnitude while matching full
-fine-tuning quality, and adding no inference latency once merged. It has become
-the standard way to adapt a diffusion U-Net to a new visual domain on a small
-dataset, which is precisely what the LoRA branch of this project attempted with
-rank 8 on the attention projections. The technique itself worked as advertised ---
-training converged and the adapter demonstrably changed the generated
-output --- but Section~\ref{sec:results} shows the adapted generator did not
-produce more useful training data, and on the class-agnostic track it produced
-the single worst arm in the grid.
+weights and learns a low-rank update for selected projection matrices, cutting
+trainable parameters by orders of magnitude while matching full fine-tuning
+quality and adding no inference latency once merged. It has become the standard
+way to adapt a diffusion U-Net to a new visual domain on a small dataset, which
+is what the LoRA branch of this project attempted at rank 8. The technique
+itself worked as advertised, since training converged and the adapter
+demonstrably changed the generated output. Section~\ref{sec:results} shows that
+the adapted generator still did not produce more useful training data, and that
+on the class-agnostic track it produced the worst arm in the grid.

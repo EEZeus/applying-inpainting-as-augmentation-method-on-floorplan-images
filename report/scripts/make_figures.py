@@ -160,12 +160,13 @@ def fig_class_distribution():
 def fig_rare_support():
     rows = {int(r["category_id"]): r for r in read_csv(ASSETS / "splits_class_distribution.csv")}
     cats = RARE + LOWSUP
-    labels = ["%d\n%s" % (c, CLASS_NAMES[c]) for c in cats]
+    labels = ["%d %s" % (c, CLASS_NAMES[c]) for c in cats]
     tr = [int(rows[c]["train_instances"]) for c in cats]
     va = [int(rows[c]["val_instances"]) for c in cats]
     te = [int(rows[c]["test_instances"]) for c in cats]
+    top = max(tr + va + te)
 
-    fig, ax = plt.subplots(figsize=(6.4, 2.5))
+    fig, ax = plt.subplots(figsize=(6.4, 2.9))
     width = 0.27
     xs = range(len(cats))
     for offset, vals, colour, name in ((-width, tr, BLUE, "train"),
@@ -174,13 +175,20 @@ def fig_rare_support():
         bars = ax.bar([x + offset for x in xs], vals, width, color=colour, label=name)
         ax.bar_label(bars, fontsize=6.5, padding=1)
     ax.set_xticks(list(xs))
-    ax.set_xticklabels(labels, fontsize=6.8)
+    # Rotated single-line labels: the German class names are too long to sit
+    # horizontally at this width without colliding with their neighbours.
+    ax.set_xticklabels(labels, fontsize=7, rotation=30, ha="right",
+                       rotation_mode="anchor")
+    for pos, c in enumerate(cats):
+        ax.get_xticklabels()[pos].set_color(VERMILLION if c in RARE else GREY)
     ax.set_ylabel("instances")
-    ax.set_ylim(0, max(tr + va + te) * 1.28)
+    ax.set_ylim(0, top * 1.30)
+    ax.set_xlim(-0.6, len(cats) - 0.4)
     ax.axvline(5.5, color=GREY, lw=0.8, ls=":")
-    ax.text(6.5, max(tr + va + te) * 1.15, "low support", color=GREY, fontsize=7, ha="center")
-    ax.legend(loc="upper left", frameon=False, ncol=3)
-    ax.set_title("Support of the rare and low-support classes; 17 rare test instances in total")
+    ax.text(6.5, top * 1.13, "low support", color=GREY, fontsize=7, ha="center")
+    ax.legend(loc="upper left", frameon=False, ncol=3, columnspacing=1.2)
+    ax.set_title("Support of the rare and low-support classes; "
+                 "17 rare test instances in total")
     save(fig, "fig_rare_support.pdf")
 
 

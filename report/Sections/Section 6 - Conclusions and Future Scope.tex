@@ -2,116 +2,114 @@
 
 The project set out to determine whether diffusion or LoRA inpainting of rare
 room types improves room-instance segmentation of architectural floor plans, and
-whether that answer depends on the backbone. The measured answer is that it does
+whether the answer depends on the backbone. The measured answer is that it does
 not improve segmentation, and that the backbone matters far more than the
 augmentation.
 
 Goal 1 was achieved as specified. Fourteen controlled arms were built on
-leakage-safe generators that read only frozen training identifiers, each accepted
-sample passing automated geometry, pixel-quality and exact-structural-invariance
-checks with a recorded decision audit and output hash, and each arm training
-under the identical model, schedule and 35-step-per-epoch budget in both the
-multiclass and class-agnostic views. The matrix included the non-generative
-controls that make the diffusion treatment interpretable, and it was that design
-choice --- rather than any positive finding --- that produced the project's most
-useful result.
+generators that read only frozen training images, with each accepted sample
+passing automated geometry, pixel-quality and structural checks and carrying a
+recorded audit. Each arm trained under the same model, schedule and step budget
+in both views. The matrix included the non-generative controls that make the
+diffusion treatment interpretable, and that design choice, rather than any
+positive finding, produced the project's most useful result.
 
-Goal 2 was achieved in the sense the goal statement anticipated: a defensible
-answer was obtained, and the answer is a null result. Across 84 Mask R-CNN
-training runs, no augmentation arm produced a difference from the unaugmented
-baseline that the data supports. Every paired sign test on the three-seed grid
-returned $p \ge 0.25$, and $0.25$ is the floor of the test at $n=3$. Nine of the
-thirteen augmented arms scored below baseline on the class-agnostic track, the
-LoRA conversion worst at $-0.057$. The cross-validation over 21 held-out images
-reproduced the same ordering. The single result with a consistent sign is
-exemplar copy-paste at $+0.045$ class-agnostic AP, positive in all five folds at
-$p = 0.0625$ --- and copy-paste is the control arm that contains no generated
-pixels, which is the opposite of the hypothesis under test. It is also the
-outcome Ghiasi et al.\ \cite{ghiasi2021copypaste} would have predicted.
+Goal 2 was achieved in the sense its statement anticipated. A defensible answer
+was obtained, and the answer is a null result. Across 84 Mask R-CNN training
+runs, no augmentation arm produced a difference from the unaugmented baseline
+that the data supports. Every paired sign test on the three-seed grid returned
+$p \ge 0.25$, the floor of the test at $n=3$. Nine of the thirteen augmented
+arms scored below baseline on the class-agnostic track, with the LoRA conversion
+worst at $-0.057$. The cross-validation over 21 held-out images reproduced the
+same ordering. The single result with a consistent sign is exemplar copy-paste
+at $+0.045$ class-agnostic AP, positive in all five folds at $p = 0.0625$, and
+copy-paste is the control arm that contains no generated pixels. That outcome
+runs against the hypothesis under test, and Ghiasi et al.\
+\cite{ghiasi2021copypaste} would have predicted it.
 
 Goal 3 changed the framing of the project. SAM 3 without any augmentation
-reached $0.713$ class-agnostic and $0.115$ multiclass mask AP, exceeding the best
-Mask R-CNN arm by $0.089$ and $0.011$ respectively. The class-agnostic gap is
-about two and a half times the largest augmentation delta measured anywhere in
-the grid. Under augmentation SAM 3 showed a $+0.032$ multiclass gain from
-copy-paste, but on a single seed, inside the $0.002$--$0.018$ seed-noise band
+reached $0.713$ class-agnostic and $0.115$ multiclass mask AP, exceeding the
+best Mask R-CNN arm by $0.089$ and $0.011$ respectively. The class-agnostic gap
+is about two and a half times the largest augmentation delta measured anywhere
+in the grid. Under augmentation SAM 3 showed a $+0.032$ multiclass gain from
+copy-paste, but on a single seed, inside the $0.002$ to $0.018$ seed-noise band
 measured on the grid, and accompanied by a class-agnostic loss under all three
-augmentations --- so the sign of the copy-paste effect is opposite in the two
-backbones. That inconsistency is itself the finding: at this data scale the
+augmentations. The sign of the copy-paste effect is therefore opposite in the
+two backbones. That inconsistency is itself the finding: at this data scale the
 augmentation effect is not a stable property of the augmentation.
 
-Goal 4 supplied the diagnosis. Handing a frozen DINOv2-base encoder perfect
-ground-truth crops --- no detector error whatsoever --- yielded $0.454$ top-1
-accuracy over 19 classes and exactly $0.000$ macro recall over the six
-primary-rare classes, in every arm and for both heads. Adding the 171 synthetic
-rare crops lowered top-1 accuracy in both heads and left rare recall at zero. The
-end-to-end two-stage system reached $0.091$ mask AP, below both fine-tuned
-detectors. Combined with the class-agnostic results, this locates the failure
-precisely: room \emph{localisation} is largely solved on this dataset at
-$0.59$--$0.71$ AP, and room \emph{typing} is not, for the tail or for several head
-classes either. No augmentation of the training pixels was going to fix a
-classification problem of that shape.
+Goal 4 supplied the diagnosis. Handed perfect ground-truth crops, with no
+detector error whatsoever, a frozen DINOv2-base encoder with a linear head
+yielded $0.454$ top-1 accuracy over 19 classes and exactly $0.000$ macro recall
+over the six primary-rare classes, in every arm and for both heads. Adding the
+171 synthetic rare crops lowered top-1 accuracy in both heads and left rare
+recall at zero. The end-to-end two-stage system reached $0.091$ mask AP, below
+both fine-tuned detectors. Combined with the class-agnostic results, this
+locates the failure precisely. Room localisation is largely solved on this
+dataset at $0.59$ to $0.71$ AP, while room typing is not, for the tail and for
+several head classes as well. No augmentation of the training pixels was going
+to fix a classification problem of that shape.
 
 The wider conclusion is a scope statement rather than a defeat. The generative
 augmentation literature surveyed in Section~3 reports its gains on benchmarks
-with 100k training images where a ``rare'' class still has a few hundred
-instances \cite{gupta2019lvis,xie2024mosaicfusion,shin2023fillup}. This project
-had 35 training plans, 30 rare training instances and 17 rare test instances. In
-that regime the measurement itself is the binding constraint: an AP computed over
-one or two instances is a step function, and the experiment can exclude a large
-rare-class effect but cannot resolve a small one. The qualitative evidence in
-Figures~\ref{fig:qastrategya} and \ref{fig:loraval} suggests the mechanism as
-well. A pretrained diffusion model asked to draw a German Versammlungsraum
-produces perspective furniture, and the LoRA adapter that fixed the domain
-mismatch learned mostly that floor plans are white space --- partly because the
-mask construction protects detected dark strokes, and the printed room labels and
-symbols that identify a room type are exactly those strokes. The safety
-machinery that made the augmentation trustworthy also removed most of what
-carried the class signal.
+with 100k training images, where a rare class still has a few hundred instances
+\cite{gupta2019lvis,xie2024mosaicfusion,shin2023fillup}. This project had 35
+training plans, 30 rare training instances and 17 rare test instances. In that
+regime the measurement itself is the binding constraint. An AP computed over one
+or two instances is a step function, so the experiment can exclude a large
+rare-class effect while being unable to resolve a small one.
+
+The qualitative evidence suggests the mechanism. A pretrained diffusion model
+asked to draw a German Versammlungsraum produces perspective furniture, as
+Figure~\ref{fig:qastrategya} shows. The LoRA adapter that fixed the domain
+mismatch learned mostly that floor plans are white space, as
+Figure~\ref{fig:loraval} shows. Part of the reason is that the mask construction
+protects detected dark strokes, and the printed room labels and symbols that
+identify a room type are exactly those strokes. The safety machinery that made
+the augmentation trustworthy also removed most of what carried the class signal.
 
 \subsection*{Future scope}
 
-Four directions follow from the measurements rather than from speculation, and
-they are ordered by expected value per unit of effort.
+Four directions follow from the measurements rather than from speculation,
+ordered by expected value per unit of effort.
 
 \emph{Read the drawing's own text.} Every plan in this dataset prints the room
-type inside the room --- ``B\"uro'', ``Technik'', ``Abstellraum''. The vision-only
-classifier scored zero recall on all six rare classes while that label sat inside
-the crop it was given. Pairing the class-agnostic detector, which already works,
-with OCR or a vision-language model over the crop is the obvious next experiment,
-and WAFFLE \cite{ganon2025waffle} demonstrates the approach at scale on
-heterogeneous floor plans. This is likely to move the multiclass number more than
-anything attempted in this project.
+type inside the room, such as ``B\"uro'', ``Technik'' or ``Abstellraum''. The
+vision-only classifier scored zero recall on all six rare classes while that
+label sat inside the crop it was given. Pairing the class-agnostic detector,
+which already works, with OCR or a vision-language model over the crop is the
+obvious next experiment, and WAFFLE \cite{ganon2025waffle} demonstrates the
+approach at scale on heterogeneous floor plans. This is likely to move the
+multiclass number more than anything attempted in this project.
 
-\emph{Try a loss-side long-tail treatment before any further data synthesis.} The
-project spent its effort on the data and none on the objective. A Seesaw loss
-\cite{wang2021seesaw} costs one configuration change, needs no generator, and
-attacks the classification imbalance the two-stage experiment identified as the
-actual failure. It should be run on the SAM 3 backbone, which is where the
-headroom is.
+\emph{Try a loss-side long-tail treatment before any further data synthesis.}
+The project spent its effort on the data and none on the objective. A Seesaw
+loss \cite{wang2021seesaw} costs one configuration change, needs no generator,
+and attacks the classification imbalance that the two-stage experiment
+identified as the actual failure. It should be run on the SAM 3 backbone, where
+the headroom is.
 
 \emph{Fix the semantic gap in generation, or steer instead of adapting.} If
-generative augmentation is revisited, the two concrete fixes are already
-identified in the literature. Gen-n-Val \cite{huang2025gennval} shows that a
-semantic validator, not more generation, is the binding constraint --- our
-pipeline could certify structural safety but recorded
-\texttt{semantic\_correctness = unverified} for every prompt-based sample. DoGE
-\cite{wang2024doge} avoids adapter training entirely by steering a frozen
-generator with a domain-gap embedding, which suits a 30-instance tail better than
-LoRA fine-tuning does. The revised ``semantic v2'' generator implemented late in
-this project --- masking compact interior labels while preserving structural
-lines, and seeding generation with a real rare exemplar --- is built but was not
-run through the full grid, and it is the cheapest of these to complete. TMI
-\cite{song2026tmi} additionally predicts that the prompt-driven and
-exemplar-driven families are complementary and that neither works alone, which
-matches what was observed here and suggests the combination is worth one run.
+generative augmentation is revisited, the literature already identifies two
+concrete fixes. Gen-n-Val \cite{huang2025gennval} shows that a semantic
+validator, not more generation, is the binding constraint. Our pipeline could
+certify structural safety while recording semantic correctness as unverified for
+every prompt-based sample. DoGE \cite{wang2024doge} avoids adapter training
+entirely by steering a frozen generator with a domain-gap embedding, which suits
+a 30-instance tail better than LoRA fine-tuning does. The revised generator
+implemented late in this project, which masks compact interior labels while
+preserving structural lines and seeds generation with a real rare exemplar, is
+built but was never run through the full grid. It is the cheapest of these to
+complete. TMI \cite{song2026tmi} additionally predicts that the prompt-driven
+and exemplar-driven families are complementary and that neither works alone,
+which matches what was observed here and makes the combination worth one run.
 
 \emph{Collect more rare-class test data before running anything else.} This is
 the least interesting recommendation and the most important one. Seventeen rare
 test instances cannot support the claim the project was designed to make, and no
 amount of methodological care removes that ceiling. Roughly a hundred rare test
-instances --- reachable by annotating a few dozen further plans from the same
-archive --- would make the difference between excluding a large effect and
+instances, reachable by annotating a few dozen further plans from the same
+archive, would make the difference between excluding a large effect and
 measuring a real one. Until that exists, the defensible use of this dataset is
 class-agnostic room extraction, where both backbones already perform well, with
 room typing handled by the printed labels rather than by appearance.

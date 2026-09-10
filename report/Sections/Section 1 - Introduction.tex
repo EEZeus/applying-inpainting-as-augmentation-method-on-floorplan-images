@@ -2,66 +2,65 @@
 \section{Introduction}
 
 Architectural floor plans encode a building as a set of labelled rooms. Turning
-a scanned or exported plan back into that structured form --- one polygon and one
-room type per room --- is an instance-segmentation problem, and it is the step
-that stands between a drawing archive and any downstream query about areas,
-circulation or fire-safety compliance. Public work on the task has concentrated
-on residential plans with a handful of coarse categories
-\cite{kalervo2019cubicasa5k,kratochvila2024multiunit}. The dataset used in this
-project is different in a way that matters: it consists of German
+a scanned or exported plan back into that structured form, one polygon and one
+room type per room, is an instance-segmentation problem. It is also the step
+that stands between a drawing archive and any later query about areas,
+circulation or fire-safety compliance. Published work on the task has
+concentrated on residential plans with a handful of coarse categories
+\cite{kalervo2019cubicasa5k,kratochvila2024multiunit}.
+
+The dataset used here differs in a way that matters. It consists of German
 \emph{Feuerwehrpl\"ane} (fire-brigade plans) of office and institutional
 buildings, annotated with 19 functional room categories whose frequencies span
-almost three orders of magnitude. Six of those categories --- Allg.\
-Verkehrsfl\"ache, Abstellraum, Versammlungsraum, Schacht, Garderobe and
-Sanit\"arraum --- together account for 70 of the 1633 polygon annotations, of which 30 fall in
-the training split and only 17 in the held-out test split.
+almost three orders of magnitude. Six of those categories (Allg.\
+Verkehrsfl\"ache, Abstellraum, Versammlungsraum, Schacht, Garderobe,
+Sanit\"arraum) account for 70 of the 1633 polygon annotations, of which 30 fall
+in the training split and only 17 in the held-out test split.
 
 That imbalance is the practical obstacle. A detector trained on the raw data
-learns the frequent categories and never predicts the rare ones, so the very
-rooms an inspector most often needs to locate are the ones the model cannot
-name. The generic remedy in the long-tailed literature is to re-weight the loss
-or the sampler \cite{wang2021seesaw}; the more recent remedy is to synthesise the
-missing examples with a text-to-image diffusion model
-\cite{xie2024mosaicfusion,shin2023fillup,wang2024doge}. Floor plans are an
-unusually favourable setting for the synthetic route, because the drawing is
-mostly white space bounded by thin black strokes: a room interior can be
-repainted while every wall, door, label and neighbouring room is preserved
-bit-exactly. The project therefore asked a narrow, testable question. Does
-diffusion or LoRA inpainting of rare rooms improve room-instance segmentation on
-this dataset, and does the answer depend on which backbone is used?
+learns the frequent categories and never predicts the rare ones, so the rooms an
+inspector most often needs to locate are the ones the model cannot name. The
+usual remedy in the long-tailed literature is to reweight the loss or the
+sampler \cite{wang2021seesaw}. A more recent remedy is to synthesise the missing
+examples with a text-to-image diffusion model
+\cite{xie2024mosaicfusion,shin2023fillup,wang2024doge}. Floor plans look like a
+favourable setting for the synthetic route, since the drawing is mostly white
+space bounded by thin black strokes. A room interior can therefore be repainted
+while every wall, door, label and neighbouring room survives untouched. The
+project asked one narrow question. Does diffusion or LoRA inpainting of rare
+rooms improve room-instance segmentation on this dataset, and does the answer
+depend on the backbone?
 
-The work reported here consists of four parts, all carried out by the author. A
-leakage-safe augmentation stack was built that generates rare-room examples from
-training-split pixels only and admits them through automated structural and
-pixel-level quality control, producing fourteen controlled experiment arms
-covering prompt-based inpainting, an exemplar-guided variant with copy-paste and
-feather-blend ablations, and a class-conditioned rank-8 LoRA adapter
-\cite{hu2022lora} on Stable Diffusion 1.5 inpainting \cite{rombach2022ldm}.
-Each arm was then trained and evaluated twice --- once for the 19-class problem
-and once for a derived class-agnostic ``room versus background'' view --- with a
-torchvision Mask R-CNN \cite{he2017maskrcnn} over three seeds, and re-evaluated
-under a five-fold rotated held-out cross-validation that pools 21 held-out
-images instead of 11. The three augmentation datasets that looked most promising
-were carried over to a fine-tuned SAM 3 \cite{carion2025sam3}. Finally, a
-two-stage pipeline was implemented that separates localisation from naming: SAM 3
-class-agnostic proposals are cropped and classified by a frozen DINOv2-base
-encoder \cite{oquab2024dinov2} with a linear or cosine-kNN head, with and without
-the synthetic rare crops.
+The work has four parts, all carried out by the author. The first is an
+augmentation stack that generates rare-room examples from training-split pixels
+only and admits them through automated structural and pixel checks. It produces
+fourteen controlled arms covering prompt-based inpainting, an exemplar-guided
+variant with copy-paste and feather-blend ablations, and a rank-8 LoRA adapter
+\cite{hu2022lora} on Stable Diffusion 1.5 inpainting \cite{rombach2022ldm}. The
+second part trains and evaluates every arm twice, once for the 19-class problem
+and once for a derived class-agnostic view, using a torchvision Mask R-CNN
+\cite{he2017maskrcnn} over three seeds. Those checkpoints were then re-evaluated
+under a five-fold cross-validation that pools 21 held-out images instead of 11.
+The third part carries the three most promising augmentation datasets over to a
+fine-tuned SAM 3 \cite{carion2025sam3}. The fourth separates localisation from
+naming: SAM 3 class-agnostic proposals are cropped and classified by a frozen
+DINOv2-base encoder \cite{oquab2024dinov2}, with and without the synthetic rare
+crops.
 
-The result is negative and consistent. Across three seeds and five
-cross-validation folds, no diffusion or LoRA arm beat the unaugmented baseline
-by a margin the data can support; every paired sign test on the three-seed grid
-returned $p \ge 0.25$, and nine of thirteen augmented arms scored below baseline
-on the class-agnostic track. The only augmentation with a repeatable positive
-sign was plain exemplar copy-paste, which is the control condition containing no
-generated pixels at all, and even its best case ($+0.045$ class-agnostic AP,
-positive in all five folds) reaches only $p = 0.0625$, the smallest $p$-value
-attainable at $K = 5$. Rare-class AP remained at or near zero everywhere. What
-did move the numbers was the choice of backbone: SAM 3 scored $0.713$
-class-agnostic mask AP against $0.624$ for the best Mask R-CNN arm, a gap larger
-than every augmentation effect measured in the project combined. The
-diagnostic value of the two-stage experiment is what makes the negative result
-informative rather than merely disappointing --- the frozen DINOv2 classifier
-recalled \emph{zero} rare instances even when handed perfect ground-truth crops,
-which locates the failure in room-type classification under $17$--$40$ test
-instances rather than in the segmentation model or in the augmentation pipeline.
+The result is negative and consistent. Across three seeds and five folds, no
+diffusion or LoRA arm beat the unaugmented baseline by a margin the data
+supports. Every paired sign test on the three-seed grid returned $p \ge 0.25$,
+and nine of thirteen augmented arms scored below baseline on the class-agnostic
+track. The only augmentation with a repeatable positive sign was plain exemplar
+copy-paste, the control condition that contains no generated pixels at all. Even
+its best case, $+0.045$ class-agnostic AP with all five folds positive, reaches
+only $p = 0.0625$, the smallest value attainable at $K = 5$. Rare-class AP
+stayed at or near zero everywhere.
+
+What did move the numbers was the backbone. SAM 3 scored $0.713$ class-agnostic
+mask AP against $0.624$ for the best Mask R-CNN arm, a gap larger than every
+augmentation effect measured in the project. The two-stage experiment shows why
+the negative result is still informative. Handed perfect ground-truth crops, the
+frozen DINOv2 classifier recalled zero rare instances. The failure therefore
+sits in room-type classification at a scale of 17 to 40 test instances. Neither
+the segmentation model nor the augmentation pipeline is the limiting factor.
