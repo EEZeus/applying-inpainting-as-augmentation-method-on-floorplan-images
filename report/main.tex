@@ -44,10 +44,12 @@ project report for WiSe 2025-26}
 
 %TC:ignore
 \begin{center}
-    \begin{figure}[htbp]
-      \centering
-      \includegraphics[width=0.4\textwidth]{images/rptuLogo.jpg}
-    \end{figure}
+    % The RPTU wordmark carries built-in padding while the DSA mark fills its box,
+    % so the DSA logo is set smaller to match apparent weight, not box height.
+    \includegraphics[height=2.2cm]{images/rptuLogo.jpg}%
+    \hspace{1.2cm}%
+    \raisebox{0.15cm}{\includegraphics[height=1.7cm]{images/dsaLogo.jpg}}
+
     \vspace{0.8cm}
 
     Applied Machine Learning, Fachbereich Informatik\\
