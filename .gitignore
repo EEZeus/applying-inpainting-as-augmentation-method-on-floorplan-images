@@ -1,2 +1,5 @@
-# Dataset stored beside the source tree. Keep it on persistent storage, not Git.
+# Not tracked: source dataset, build/deploy scratch, local release archives.
 /area_segmentation_coco/
+/dist/
+/.deploy/
+/releases/
