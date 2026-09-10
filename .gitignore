@@ -16,3 +16,7 @@ report/main.pdf
 report/assets/
 report/*.fdb_latexmk
 report/*.fls
+
+# Exported report bundle (rebuildable).
+/floorplan-report.zip
+report/*.synctex.gz
