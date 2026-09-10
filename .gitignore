@@ -3,3 +3,16 @@
 /dist/
 /.deploy/
 /releases/
+
+# LaTeX build products and fetched cluster result files for the report.
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.lof
+report/*.bbl
+report/*.blg
+report/main.pdf
+report/assets/
+report/*.fdb_latexmk
+report/*.fls

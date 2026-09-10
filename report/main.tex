@@ -1,0 +1,137 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{float}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage{chronology}
+\usepackage{graphicx}
+\graphicspath{{images/}}
+\usepackage{moreverb}
+\usepackage{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+% allow long paths/identifiers set in \texttt to break across lines
+\renewcommand{\UrlFont}{\ttfamily}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\sloppy
+ \geometry{
+ a4paper,
+ total={170mm,257mm},
+ left=20mm,
+ top=20mm,
+ }
+
+ \providecommand{\keywords}[1]
+{
+  \small
+  \textbf{\textit{Keywords---}} #1
+}
+
+\title{Inpainting as a Data-Augmentation Method for Room-Instance Segmentation
+of Architectural Floor Plans \\[1ex] \large Data Science and its Applications
+project report for WiSe 2025-26}
+\author{E. Espandar \\ espandar@rptu.de}
+\date{10 September, 2026}
+
+\pagenumbering{gobble}
+
+\begin{document}
+
+\maketitle
+
+%TC:ignore
+\begin{center}
+    \begin{figure}[htbp]
+      \centering
+      \includegraphics[width=0.4\textwidth]{images/rptuLogo.jpg}
+    \end{figure}
+    \vspace{0.8cm}
+
+    Applied Machine Learning, Fachbereich Informatik\\
+
+    RPTU Kaiserslautern\\
+    Deutschland
+
+    \vspace{0.8cm}
+
+    Submitted in partial fulfilment of the requirements for the Degree of M.Sc. Computer Science
+   \vspace{0.8cm}
+
+    Supervised by\\
+    Full name with title\\
+    Full name with title\\
+
+\end{center}
+
+\pagebreak
+
+\pagenumbering{roman}
+
+\begin{abstract}
+Room-instance segmentation of architectural floor plans is limited by class
+imbalance: in the 56-plan, 19-category dataset used here, six primary-rare room
+categories contribute 70 of 1633 polygon annotations and only 17 test instances.
+This report asks whether generating additional rare-room examples with diffusion
+inpainting repairs that imbalance, and whether the answer depends on the
+detection backbone. Fourteen leakage-safe augmentation arms were built from the
+training split alone --- prompt-based Stable Diffusion 1.5 inpainting, an
+exemplar-guided variant with copy-paste and feather-blend controls, and a
+class-conditioned rank-8 LoRA adapter --- and each was evaluated with a
+torchvision Mask R-CNN over three seeds, a five-fold rotated held-out
+cross-validation, a fine-tuned SAM 3, and a two-stage pipeline that labels
+class-agnostic proposals with a frozen DINOv2 classifier. No diffusion or LoRA
+arm produced a statistically defensible gain. On the three-seed grid the largest
+class-agnostic change was $+0.036$ mask AP for plain copy-paste and $-0.057$ for
+LoRA, with every paired sign test at $p \ge 0.25$; nine of thirteen augmented
+arms scored below the unaugmented baseline. Cross-validation over 21 held-out
+images reproduced the pattern, with copy-paste at $+0.045$ AP, positive in all
+five folds ($p = 0.0625$, the minimum attainable at $K=5$). SAM 3 showed a small
+multiclass gain from copy-paste ($+0.032$) but lost class-agnostic AP under every
+augmentation, on a single seed and inside the seed-noise band measured on the
+grid. Rare-class AP stayed at or near zero for every method, and the frozen
+DINOv2 classifier recalled zero rare instances even on perfect ground-truth
+crops. The dominant effect was the backbone: SAM 3 exceeded the best Mask R-CNN
+arm by $0.089$ class-agnostic AP, an order of magnitude more than any
+augmentation delta. Class-agnostic room localisation is already solved to
+$0.59$--$0.71$ AP; the unsolved problem is room-type classification at this data
+scale, and neither inpainting augmentation nor a dedicated frozen classifier
+addressed it.
+\end{abstract}
+
+\keywords{instance segmentation; data augmentation; diffusion inpainting; LoRA;
+long-tailed recognition; architectural floor plans; Mask R-CNN; SAM 3; DINOv2;
+negative result}
+%TC:endignore
+
+\pagebreak
+
+\tableofcontents
+\pagebreak
+\listoffigures
+\pagebreak
+
+
+
+\pagenumbering{arabic}
+
+\input{Sections/Section 1 - Introduction.tex}
+
+\input{Sections/Section 2 - Problem statement and goals.tex}
+
+\input{Sections/Section 3 - Literature Review.tex}
+
+\input{Sections/Section 4 - Implementation Details.tex}
+
+\input{Sections/Section 5 - Results.tex}
+
+\input{Sections/Section 6 - Conclusions and Future Scope.tex}
+
+\medskip
+
+\bibliographystyle{unsrt}
+\bibliography{references}
+
+\end{document}

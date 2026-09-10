@@ -1,0 +1,100 @@
+\section{Problem statement and Goals}
+
+The dataset consists of 56 distinct German fire-brigade floor plans carrying
+1633 polygon annotations over 19 functional room categories, partitioned by a
+frozen project-aware 35/10/11 train/validation/test split in which no building
+project crosses a partition boundary. The class frequencies are strongly
+long-tailed. Categories 1--10 (B\"uroraum, WC, Treppe, Lager, Technikraum,
+Aufzug, Andere, K\"uche, ``Flur, Halle'', Besprechungsraum) hold 1551 of the 1633
+annotations. The six categories designated primary-rare --- 11 Allg.\
+Verkehrsfl\"ache, 12 Abstellraum, 13 Versammlungsraum, 14 Schacht, 15 Garderobe,
+16 Sanit\"arraum --- hold 70 annotations in total, of which 30 fall in the
+training split and 17 in the test split. Two further categories, 17 Werkstatt
+and 18 Speiseraum, are labelled low-support and reported separately; category 19
+Labor has zero test instances and is excluded from every quantitative claim.
+The per-split counts are given in Section~\ref{sec:dataset} and plotted in
+Figure~\ref{fig:classdist}.
+
+A detector trained on this distribution learns the head classes and assigns
+essentially no probability mass to the tail, so the room types of greatest
+operational interest --- shafts, storage rooms, assembly rooms --- are located but
+never named, or not detected at all. The affected parties are the archive owners
+who would use such a model to convert legacy plans into structured building
+data, and any downstream fire-safety or facility-management query that depends on
+room type rather than room geometry.
+
+Since the drawings are line art on white ground, the interior of a single room
+can be repainted by a diffusion inpainting model while every wall stroke, door
+symbol, text label and neighbouring annotation is preserved exactly. This makes
+the dataset an unusually clean testbed for the hypothesis that generative
+augmentation can fill a long tail. The project was formulated to test that
+hypothesis under conditions strict enough that a negative answer would be
+informative: generation must read training-split pixels only, so that no
+synthetic sample can leak validation or test information; every arm must differ
+from the baseline in exactly one controlled respect; and the reported effect must
+survive repetition over seeds and over evaluation splits. The problem is
+therefore not ``build the best floor-plan segmenter'' but ``measure, with a
+defensible error bar, whether inpainting augmentation helps, and whether that
+answer is a property of the augmentation or of the backbone''.
+
+Two evaluation views are used throughout. The \emph{multiclass} view is the
+19-category instance-segmentation problem scored with COCO mask AP
+\cite{lin2014coco}, plus a rare-macro AP averaged over categories 11--16 with
+non-zero test support. The \emph{class-agnostic} view maps every annotation to a
+single \texttt{room} category and measures whether the model finds room
+boundaries at all, independent of naming. Separating the two is what allows a
+change in localisation to be distinguished from a change in classification, and
+it turned out to be the decisive measurement of the project.
+
+\subsection{Goals}
+
+\subsubsection{Goal 1: Leakage-safe augmented datasets and a controlled experiment matrix}
+
+Build a generation stack that produces additional rare-room training examples
+without ever reading a validation or test image, and wrap it in an experiment
+matrix in which every arm is comparable to the unaugmented baseline. Success is
+verifiable rather than statistical: every generator must be provably restricted
+to the frozen training image identifiers; every accepted sample must pass
+automated geometry, pixel-quality and exact-structural-invariance checks with a
+recorded decision audit; every arm must use the identical model, optimiser
+schedule and optimizer-step budget, and must be evaluated on the untouched test
+annotations. The matrix must isolate the treatment of interest --- diffusion
+inpainting --- against non-generative controls, so that a measured effect can be
+attributed to the generated pixels rather than to the surrounding pipeline.
+
+\subsubsection{Goal 2: Measure the augmentation effect on Mask R-CNN}
+
+Quantify the effect of each augmentation arm on a torchvision Mask R-CNN, in
+both the multiclass and class-agnostic views, with an error bar large enough to
+support or reject a claim. This requires two independent repetitions: a grid over
+three random seeds $\{42, 123, 2026\}$ for all fourteen arms, and a rotated
+held-out cross-validation that re-evaluates the frozen checkpoints on five
+disjoint folds of the 21 held-out images, raising the pooled rare test support
+from 17 to 40 instances. Success is a statistically defensible AP delta relative
+to the unaugmented arm e0 --- explicitly including the outcome that no
+defensible delta exists, in which case the reported conclusion is a null result
+with its $n$, standard deviation and $p$-value stated.
+
+\subsubsection{Goal 3: Test whether a foundation-model backbone changes the verdict}
+
+Determine whether the Mask R-CNN verdict is a property of the augmentation or of
+the model class, by repeating the comparison on Meta's SAM 3 with its official
+trainer, open-vocabulary text-concept head and the unchanged split. The three
+most informative augmentation datasets from Goal 2 are re-used verbatim, so the
+only difference between the two backbones is the backbone. Success is a direct
+statement of whether the sign and magnitude of the augmentation effect are
+preserved, plus a measurement of the backbone effect itself, which serves as the
+scale against which every augmentation delta is judged.
+
+\subsubsection{Goal 4: Test a two-stage DINOv2 pipeline and inpainting crops as classifier augmentation}
+
+Separate localisation from naming by pairing a class-agnostic detector with a
+frozen DINOv2-base classifier over crop features, and test whether the
+inpainting-pipeline rare crops help the classifier stage where they did not help
+the detector. Two evaluations are required: a ground-truth-region top-1
+classification that removes detector error entirely and therefore isolates the
+classification bottleneck, and an end-to-end two-stage mask AP that can be
+compared directly against the fine-tuned detectors on the same test split.
+Success is a diagnosis --- whether the residual error is a localisation problem
+or a classification problem, and whether synthetic crops move the classification
+number in either direction.

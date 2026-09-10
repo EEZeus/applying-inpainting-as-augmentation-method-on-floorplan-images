@@ -1,0 +1,222 @@
+% Bibliography for "Inpainting as a Data-Augmentation Method for Room-Instance
+% Segmentation of Architectural Floor Plans".
+% Every entry was checked against arXiv, Crossref or the publisher record.
+
+% --- Copy-paste and long-tail instance segmentation -------------------------
+
+@inproceedings{ghiasi2021copypaste,
+  author    = {Ghiasi, Golnaz and Cui, Yin and Srinivas, Aravind and Qian, Rui
+               and Lin, Tsung-Yi and Cubuk, Ekin D. and Le, Quoc V. and Zoph, Barret},
+  title     = {Simple Copy-Paste is a Strong Data Augmentation Method for Instance Segmentation},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {2917--2927},
+  year      = {2021},
+  doi       = {10.1109/CVPR46437.2021.00294},
+  note      = {arXiv:2012.07177; code: \url{https://github.com/tensorflow/tpu/tree/master/models/official/detection/projects/copy_paste}; DOI: \url{https://doi.org/10.1109/CVPR46437.2021.00294}}
+}
+
+@inproceedings{wang2021seesaw,
+  author    = {Wang, Jiaqi and Zhang, Wenwei and Zang, Yuhang and Cao, Yuhang
+               and Pang, Jiangmiao and Gong, Tao and Chen, Kai and Liu, Ziwei
+               and Loy, Chen Change and Lin, Dahua},
+  title     = {Seesaw Loss for Long-Tailed Instance Segmentation},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {9690--9699},
+  year      = {2021},
+  doi       = {10.1109/CVPR46437.2021.00957},
+  note      = {arXiv:2008.10032; code in MMDetection: \url{https://github.com/open-mmlab/mmdetection}; DOI: \url{https://doi.org/10.1109/CVPR46437.2021.00957}}
+}
+
+@inproceedings{gupta2019lvis,
+  author    = {Gupta, Agrim and Doll{\'a}r, Piotr and Girshick, Ross},
+  title     = {{LVIS}: A Dataset for Large Vocabulary Instance Segmentation},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {5356--5364},
+  year      = {2019},
+  doi       = {10.1109/CVPR.2019.00550},
+  note      = {data: \url{https://www.lvisdataset.org/}; DOI: \url{https://doi.org/10.1109/CVPR.2019.00550}}
+}
+
+% --- Generative / diffusion data augmentation -------------------------------
+
+@article{xie2024mosaicfusion,
+  author  = {Xie, Jiahao and Li, Wei and Li, Xiangtai and Liu, Ziwei
+             and Ong, Yew Soon and Loy, Chen Change},
+  title   = {{MosaicFusion}: Diffusion Models as Data Augmenters for Large Vocabulary Instance Segmentation},
+  journal = {International Journal of Computer Vision (IJCV)},
+  year    = {2024},
+  note    = {arXiv:2309.13042; code and generated data: \url{https://github.com/Jiahao000/MosaicFusion}},
+  doi     = {10.48550/arXiv.2309.13042}
+}
+
+@misc{shin2023fillup,
+  author       = {Shin, Joonghyuk and Kang, Minguk and Park, Jaesik},
+  title        = {{Fill-Up}: Balancing Long-Tailed Data with Generative Models},
+  year         = {2023},
+  eprint       = {2306.07200},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+  note         = {project page and code: \url{https://alex4727.github.io/Fill-Up/}},
+  doi          = {10.48550/arXiv.2306.07200}
+}
+
+@inproceedings{wang2024doge,
+  author    = {Wang, Yinong Oliver and Chung, Younjoon and Wu, Chen Henry and De la Torre, Fernando},
+  title     = {Domain Gap Embeddings for Generative Dataset Augmentation},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {28684--28694},
+  year      = {2024},
+  doi       = {10.1109/CVPR52733.2024.02710},
+  note      = {code: \url{https://github.com/humansensinglab/DoGE}; DOI: \url{https://doi.org/10.1109/CVPR52733.2024.02710}}
+}
+
+@misc{huang2025gennval,
+  author        = {Huang, Jing-En and Fang, I-Sheng and Huang, Tzuhsuan and Liu, Yu-Lun
+                   and Wang, Chih-Yu and Chen, Jun-Cheng},
+  title         = {{Gen-n-Val}: Agentic Image Data Generation and Validation},
+  year          = {2025},
+  eprint        = {2506.04676},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  note          = {accepted to the CVPR 2026 Findings track},
+  doi           = {10.48550/arXiv.2506.04676}
+}
+
+@misc{song2026tmi,
+  author        = {Song, Hyeonseop and Choi, Seokhun and Do, Hoseok},
+  title         = {{TMI}: Text-to-Image Meets Image-to-Image for Complementary Data Synthesis to Boost Long-Tailed Instance Segmentation},
+  year          = {2026},
+  eprint        = {2607.08201},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  note          = {accepted to ECCV 2026},
+  doi           = {10.48550/arXiv.2607.08201}
+}
+
+% --- Floor-plan analysis ----------------------------------------------------
+
+@inproceedings{kalervo2019cubicasa5k,
+  author    = {Kalervo, Ahti and Ylioinas, Juha and H{\"a}iki{\"o}, Markus
+               and Karhu, Antti and Kannala, Juho},
+  title     = {{CubiCasa5K}: A Dataset and an Improved Multi-Task Model for Floorplan Image Analysis},
+  booktitle = {Image Analysis (SCIA 2019)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {11482},
+  pages     = {28--40},
+  publisher = {Springer},
+  year      = {2019},
+  doi       = {10.1007/978-3-030-20205-7_3},
+  note      = {data and code: \url{https://github.com/CubiCasa/CubiCasa5k}; DOI: \url{https://doi.org/10.1007/978-3-030-20205-7_3}}
+}
+
+@misc{kratochvila2024multiunit,
+  author        = {Kratochvila, Lukas and de Jong, Gijs and Arkesteijn, Monique
+                   and Bilik, Simon and Zemcik, Tomas and Horak, Karel and Rellermeyer, Jan S.},
+  title         = {Recognizing and Reconstructing a Multi-Unit Floor Plan},
+  year          = {2024},
+  eprint        = {2408.01526},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  doi           = {10.48550/arXiv.2408.01526}
+}
+
+@misc{ganon2025waffle,
+  author        = {Ganon, Keren and Alper, Morris and Mikulinsky, Rachel and Averbuch-Elor, Hadar},
+  title         = {{WAFFLE}: Multimodal Floorplan Understanding in the Wild},
+  year          = {2024},
+  eprint        = {2412.00955},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  note          = {accepted to WACV 2025; data and code: \url{https://tau-vailab.github.io/WAFFLE/}},
+  doi           = {10.48550/arXiv.2412.00955}
+}
+
+% --- Backbones and foundation models ----------------------------------------
+
+@inproceedings{he2017maskrcnn,
+  author    = {He, Kaiming and Gkioxari, Georgia and Doll{\'a}r, Piotr and Girshick, Ross},
+  title     = {Mask {R-CNN}},
+  booktitle = {Proceedings of the IEEE International Conference on Computer Vision (ICCV)},
+  pages     = {2980--2988},
+  year      = {2017},
+  doi       = {10.1109/ICCV.2017.322},
+  note      = {DOI: \url{https://doi.org/10.1109/ICCV.2017.322}}
+}
+
+@inproceedings{lin2014coco,
+  author    = {Lin, Tsung-Yi and Maire, Michael and Belongie, Serge and Hays, James
+               and Perona, Pietro and Ramanan, Deva and Doll{\'a}r, Piotr and Zitnick, C. Lawrence},
+  title     = {Microsoft {COCO}: Common Objects in Context},
+  booktitle = {Computer Vision -- ECCV 2014},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {8693},
+  pages     = {740--755},
+  publisher = {Springer},
+  year      = {2014},
+  doi       = {10.1007/978-3-319-10602-1_48},
+  note      = {DOI: \url{https://doi.org/10.1007/978-3-319-10602-1_48}}
+}
+
+@misc{carion2025sam3,
+  author        = {Carion, Nicolas and Gustafson, Laura and Hu, Yuan-Ting and Debnath, Shoubhik
+                   and Hu, Ronghang and Suris, Didac and Ryali, Chaitanya and Alwala, Kalyan Vasudev
+                   and Khedr, Haitham and Ravi, Nikhila and Doll{\'a}r, Piotr and Saenko, Kate
+                   and Zhang, Pengchuan and Feichtenhofer, Christoph},
+  title         = {{SAM 3}: Segment Anything with Concepts},
+  year          = {2025},
+  eprint        = {2511.16719},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  note          = {code and weights: \url{https://github.com/facebookresearch/sam3}},
+  doi           = {10.48550/arXiv.2511.16719}
+}
+
+@article{oquab2024dinov2,
+  author  = {Oquab, Maxime and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and Vo, Huy
+             and Szafraniec, Marc and Khalidov, Vasil and Fernandez, Pierre and Haziza, Daniel
+             and Massa, Francisco and El-Nouby, Alaaeldin and Assran, Mahmoud and Ballas, Nicolas
+             and Galuba, Wojciech and Howes, Russell and Huang, Po-Yao and Li, Shang-Wen
+             and Misra, Ishan and Rabbat, Michael and Sharma, Vasu and Synnaeve, Gabriel
+             and Xu, Hu and Jegou, Herv{\'e} and Mairal, Julien and Labatut, Patrick
+             and Joulin, Armand and Bojanowski, Piotr},
+  title   = {{DINOv2}: Learning Robust Visual Features without Supervision},
+  journal = {Transactions on Machine Learning Research (TMLR)},
+  year    = {2024},
+  note    = {arXiv:2304.07193; code and weights: \url{https://github.com/facebookresearch/dinov2}},
+  doi     = {10.48550/arXiv.2304.07193}
+}
+
+@misc{zhuo2025uinofss,
+  author        = {Zhuo, Wei and Tang, Zhiyue and Xue, Wufeng and Ding, Hao
+                   and Ji, Junkai and Shen, Linlin},
+  title         = {{UINO-FSS}: Unifying Representation Learning and Few-Shot Segmentation via Hierarchical Distillation and Mamba-HyperCorrelation},
+  year          = {2025},
+  eprint        = {2504.15669},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  doi           = {10.48550/arXiv.2504.15669}
+}
+
+% --- Diffusion and adapters -------------------------------------------------
+
+@inproceedings{rombach2022ldm,
+  author    = {Rombach, Robin and Blattmann, Andreas and Lorenz, Dominik
+               and Esser, Patrick and Ommer, Bj{\"o}rn},
+  title     = {High-Resolution Image Synthesis with Latent Diffusion Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {10674--10685},
+  year      = {2022},
+  doi       = {10.1109/CVPR52688.2022.01042},
+  note      = {arXiv:2112.10752; code: \url{https://github.com/CompVis/latent-diffusion};
+               inpainting checkpoint used here: \url{https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting}; DOI: \url{https://doi.org/10.1109/CVPR52688.2022.01042}}
+}
+
+@inproceedings{hu2022lora,
+  author    = {Hu, Edward J. and Shen, Yelong and Wallis, Phillip and Allen-Zhu, Zeyuan
+               and Li, Yuanzhi and Wang, Shean and Wang, Lu and Chen, Weizhu},
+  title     = {{LoRA}: Low-Rank Adaptation of Large Language Models},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2022},
+  note      = {arXiv:2106.09685; code: \url{https://github.com/microsoft/LoRA}},
+  doi       = {10.48550/arXiv.2106.09685}
+}
