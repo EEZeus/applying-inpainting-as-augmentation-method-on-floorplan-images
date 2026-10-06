@@ -149,8 +149,8 @@ def fig_rescore(rescore, path):
     tracks = [t for t in ("agnostic", "multiclass") if t in rescore]
     if not tracks:
         return False
-    fig, axes = plt.subplots(1, len(tracks), figsize=(6.4 * len(tracks) / 1.4, 2.6), squeeze=False)
-    for ax, track in zip(axes[0], tracks):
+    fig, axes = plt.subplots(len(tracks), 1, figsize=(6.4, 2.3 * len(tracks)), squeeze=False)
+    for ax, track in zip(axes[:, 0], tracks):
         rows = rescore[track]["rows"]
         reference = grid_reference(track)
         for position, row in enumerate(rows):
@@ -164,8 +164,9 @@ def fig_rescore(rescore, path):
             ax.axhline(e0["heldout21"]["mean"], color=BLACK, lw=0.8, ls="--")
         ax.set_xticks(range(len(rows)))
         ax.set_xticklabels([r["arm"] for r in rows])
-        ax.set_title(f"{track}: filled = last.pth on 21 held-out plans; hollow = grid best.pth on 11 test plans")
+        ax.set_title({"agnostic": "class-agnostic track", "multiclass": "multiclass track"}[track], loc="left")
         ax.set_ylabel("mask AP")
+    fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
     return True
@@ -359,6 +360,10 @@ def build(summary, confirm_root, matched_root, qa_root, out):
         sel_text = (f"The rule selected strength {chosen}." if chosen is not None and not selection.get("forced")
                     else "Strength was forced (smoke test)." if selection.get("forced")
                     else "No strength passed the rule, so the inpainting arms were dropped.")
+        sel_text += (" Donor-stroke retention is 1.0 by construction, because the donor's dark strokes "
+                     "are excluded from the diffusion mask; that criterion guards against regressions "
+                     "rather than discriminating between strengths. The diffusion band is reported in "
+                     "Stable Diffusion latent cells (8 x 8 model pixels).")
         md.append(sel_text + "\n")
         tx.append(tex(sel_text) + "\n")
     if matched:

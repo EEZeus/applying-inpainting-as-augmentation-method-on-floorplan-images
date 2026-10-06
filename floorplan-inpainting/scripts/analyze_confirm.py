@@ -48,9 +48,9 @@ GRID_ARMS = [
 ]
 CONFIRM_ARMS = [
     ("e0", "Original (no aug)"),
-    ("e8", "C copy-paste, exact replication of e8"),
-    ("e16", "Matched copy-paste, exposure parity"),
-    ("e17", "Matched wide-seam inpainting, exposure parity"),
+    ("e8", "Copy-paste (e8 replication)"),
+    ("e16", "Matched copy-paste"),
+    ("e17", "Matched wide-seam inpainting"),
 ]
 ANNOTATIONS = {"agnostic": "data/processed/instances_deduplicated_agnostic.json",
                "multiclass": "data/processed/instances_deduplicated.json"}
