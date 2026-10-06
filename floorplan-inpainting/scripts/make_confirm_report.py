@@ -249,6 +249,60 @@ def outcome_paragraphs(confirm):
     return lines, verdict
 
 
+def interpretation(summary):
+    """Data-driven interpretation sentences (exploratory parts are labelled as such)."""
+    confirm, rescore = summary.get("confirm", {}) or {}, summary.get("rescore", {}) or {}
+    out = []
+    names = {"H1": "copy-paste (H1)", "H2": "wide-seam exemplar inpainting (H2)", "H3": "the generated pixels (H3)"}
+    for name, c in (confirm.get("tests") or {}).items():
+        ci = c.get("ci95_seed_x_image") if c else None
+        if c and not c.get("supported") and ci and ci[1] < SESOI:
+            out.append(f"For {names.get(name, name)} the upper 95% bound is {ci[1]:+.3f} AP, below the "
+                       f"pre-registered smallest effect of interest (+{SESOI:.2f}); a practically relevant "
+                       "gain is therefore excluded, not merely undetected.")
+        elif c and not c.get("supported") and ci and ci[1] >= SESOI:
+            same_sign = sum(1 for d in c.get("delta_per_project", {}).values() if d > 0)
+            out.append(f"For {names.get(name, name)} the interval [{ci[0]:+.3f}, {ci[1]:+.3f}] still admits an "
+                       f"effect of +{SESOI:.2f}; the point estimate {c['delta']:+.3f} is positive in "
+                       f"{same_sign} of {len(c.get('delta_per_project', {}))} held-out buildings, so the data neither "
+                       "confirm nor exclude a small benefit.")
+    arms = {a["arm"]: a for a in confirm.get("arms", [])}
+
+    def dose(arm):
+        values = [r["exposure"].get("synthetic_C_MULTI_occurrences_seen", 0) for r in arms[arm]["runs"] if r.get("exposure")]
+        return statistics.fmean(values) if values else None
+
+    descriptive = confirm.get("descriptive", {})
+    if "e8" in arms and "e16" in arms and descriptive.get("e8_vs_e16"):
+        c, d8, d16 = descriptive["e8_vs_e16"], dose("e8"), dose("e16")
+        if d8 and d16:
+            out.append(f"Exploratory: e8 exceeds the exposure-parity copy-paste arm e16 by {c['delta']:+.3f} AP "
+                       f"(95% CI {fmt_ci(c.get('ci95_seed_x_image'))}, one-sided p = {fmt_p(c['welch_p_one_sided'])}). "
+                       f"e8 keeps the original sampler and saw {d8 / d16:.1f} times as many converted-room "
+                       f"occurrences per run ({d8:.0f} against {d16:.0f}). The difference therefore points at "
+                       "synthetic dose rather than exemplar pixels as the driver of the original copy-paste gain; "
+                       "it was not a pre-registered contrast.")
+    for track in ("multiclass", "agnostic"):
+        rows = {r["arm"]: r for r in (rescore.get(track) or {}).get("rows", [])}
+        positive = [a for a, r in rows.items() if r.get("ci95_seed_x_image") and r["ci95_seed_x_image"][0] > 0]
+        negative = [a for a, r in rows.items() if r.get("ci95_seed_x_image") and r["ci95_seed_x_image"][1] < 0]
+        if track == "multiclass" and positive:
+            text = (f"Exploratory re-score, multiclass track: arms whose interval excludes zero are "
+                    f"{', '.join(positive)}.")
+            if "e1" in positive and "e2" in rows and rows["e2"].get("delta_vs_e0") is not None:
+                text += (f" Rare-weighted sampling alone (e1, no generated pixels) already gains "
+                         f"{rows['e1']['delta_vs_e0']:+.3f}, while Strategy A (e2) gains {rows['e2']['delta_vs_e0']:+.3f}; "
+                         f"the part attributable to inpainted appearance is at most about "
+                         f"{rows['e2']['delta_vs_e0'] - rows['e1']['delta_vs_e0']:+.3f}, consistent with the "
+                         "oversampling confound of the fixed step budget. These are three-seed numbers that "
+                         "re-use the seeds which produced the original ranking.")
+            out.append(text)
+        if track == "agnostic" and negative:
+            out.append(f"Exploratory re-score, class-agnostic track: arms whose interval lies entirely below "
+                       f"e0 are {', '.join(negative)}; these augmentations measurably harm room localisation.")
+    return out
+
+
 def errata():
     return [
         "Section 4 states that Mask R-CNN is ImageNet-initialised; the code loads the COCO-trained "
@@ -507,6 +561,9 @@ def build(summary, confirm_root, matched_root, qa_root, out):
     tx.append("\\subsection{Conclusion of the confirmatory study}\n")
     md.append(verdict + "\n")
     tx.append(tex(verdict) + "\n")
+    for line in interpretation(summary):
+        md.append(line + "\n")
+        tx.append(tex(line) + "\n")
     limits = ("Limitations: the endpoint is class-agnostic only, because 17 rare test instances cannot "
               "resolve a rare-class effect; the 21 held-out plans come from three buildings; BatchNorm runs "
               "at batch size 1 in every arm; the synthetic pool is small (one to two converted rooms per "
