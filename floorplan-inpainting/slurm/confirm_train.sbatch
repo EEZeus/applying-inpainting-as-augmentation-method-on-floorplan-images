@@ -1,5 +1,5 @@
 #!/bin/bash
-# Confirmatory training: 4 arms x 12 fresh seeds, class-agnostic track.
+# Confirmatory training: ARMS x SEEDS on TRACK (default: e0 e8 e16 e17, 12 seeds, agnostic).
 # Task id = arm_idx * N_SEEDS + seed_idx. Arms dropped by the gate exit 0.
 # After training, last.pth is evaluated on the 21 held-out plans with a
 # prediction dump (the pre-registered endpoint).
@@ -19,38 +19,43 @@ export OMP_NUM_THREADS=2
 PY=/netscratch/espandar/miniconda3/envs/inpainting/bin/python
 CONFIRM_ROOT="${CONFIRM_ROOT:-outputs/confirm}"
 MATCHED_ROOT="${MATCHED_ROOT:-data/augmented_c_matched}"
+TRACK="${TRACK:-agnostic}"
 read -r -a SEEDS <<< "${SEEDS:-1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012}"
+read -r -a ARMS <<< "${ARMS:-e0 e8 e16 e17}"
 N_SEEDS=${#SEEDS[@]}
-ARMS=(e0 e8 e16 e17)
-CFG=(
-  configs/experiments/e0_original.yaml
-  configs/experiments_c/e8_strategy_c_copy_paste.yaml
-  configs/experiments_confirm/e16_c_copy_paste_matched.yaml
-  configs/experiments_confirm/e17_c_inpaint_wide_matched.yaml
+declare -A CFGMAP=(
+  [e0]=configs/experiments/e0_original.yaml
+  [e1]=configs/experiments/e1_oversampling.yaml
+  [e2]=configs/experiments/e2_strategy_a.yaml
+  [e8]=configs/experiments_c/e8_strategy_c_copy_paste.yaml
+  [e16]=configs/experiments_confirm/e16_c_copy_paste_matched.yaml
+  [e17]=configs/experiments_confirm/e17_c_inpaint_wide_matched.yaml
 )
 TID=${SLURM_ARRAY_TASK_ID}
 ARM_IDX=$(( TID / N_SEEDS ))
 (( ARM_IDX < ${#ARMS[@]} )) || { echo "task ${TID} out of range" >&2; exit 2; }
 ARM=${ARMS[$ARM_IDX]}
-CONFIG=${CFG[$ARM_IDX]}
+CONFIG=${CFGMAP[$ARM]}
 SEED=${SEEDS[$(( TID % N_SEEDS ))]}
-echo "task ${TID}: arm=${ARM} seed=${SEED} config=${CONFIG}"
-RUN=$("$PY" -c "import json,sys; print(int(json.load(open(sys.argv[1]))['run'][sys.argv[2]]))" \
-  "${CONFIRM_ROOT}/decisions.json" "${ARM}")
-if [[ "${RUN}" != 1 ]]; then
-  echo "arm ${ARM} dropped by the pre-registered gate; nothing to do"; exit 0
+echo "task ${TID}: arm=${ARM} track=${TRACK} seed=${SEED} config=${CONFIG}"
+if [[ "${SKIP_GATE:-0}" != 1 ]]; then
+  RUN=$("$PY" -c "import json,sys; print(int(json.load(open(sys.argv[1]))['run'][sys.argv[2]]))" \
+    "${CONFIRM_ROOT}/decisions.json" "${ARM}")
+  if [[ "${RUN}" != 1 ]]; then
+    echo "arm ${ARM} dropped by the pre-registered gate; nothing to do"; exit 0
+  fi
 fi
 EXTRA=()
 if [[ "${ARM}" == e16 || "${ARM}" == e17 ]]; then EXTRA=(--matched-data-root "${MATCHED_ROOT}"); fi
 EPOCH_ARGS=()
 if [[ -n "${EPOCHS:-}" ]]; then EPOCH_ARGS=(--epochs "${EPOCHS}"); fi
-RUN_DIR=${CONFIRM_ROOT}/agnostic/${ARM}/seed_${SEED}
+RUN_DIR=${CONFIRM_ROOT}/${TRACK}/${ARM}/seed_${SEED}
 EVAL_DIR=${RUN_DIR}/heldout21_last
 if [[ ! -f "${RUN_DIR}/result.json" ]]; then
-  "$PY" scripts/run_experiment.py --config "${CONFIG}" --track agnostic --seed "${SEED}" \
+  "$PY" scripts/run_experiment.py --config "${CONFIG}" --track "${TRACK}" --seed "${SEED}" \
     --output-root "${CONFIRM_ROOT}" --resume ${EXTRA[@]+"${EXTRA[@]}"} ${EPOCH_ARGS[@]+"${EPOCH_ARGS[@]}"}
 fi
 test -f "${RUN_DIR}/checkpoints/last.pth" || { echo "missing ${RUN_DIR}/checkpoints/last.pth" >&2; exit 3; }
-FP_SPLIT_DIR=data/splits_heldout21 "$PY" scripts/run_experiment.py --config "${CONFIG}" --track agnostic \
+FP_SPLIT_DIR=data/splits_heldout21 "$PY" scripts/run_experiment.py --config "${CONFIG}" --track "${TRACK}" \
   --eval-checkpoint "${RUN_DIR}/checkpoints/last.pth" --eval-split test --output-root "${CONFIRM_ROOT}" \
   --eval-tag "seed_${SEED}/heldout21_last" --dump-predictions ${EXTRA[@]+"${EXTRA[@]}"}
