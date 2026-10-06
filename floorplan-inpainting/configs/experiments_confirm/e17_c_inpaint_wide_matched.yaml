@@ -1,0 +1,12 @@
+id: e17
+method: Matched multi-room exemplar inpainting, 3-latent-cell seam (exposure-parity sampler)
+base_model_config: configs/baseline.yaml
+tracks: [agnostic]
+dataset:
+  sources: [strategy_c_wide_matched]
+sampling:
+  mode: paired_variant
+  variant_probability: 0.5
+budget:
+  steps_per_epoch: 35
+output_root: outputs/confirm

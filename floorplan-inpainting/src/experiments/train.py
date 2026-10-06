@@ -44,6 +44,10 @@ def _validate_experiment(experiment_cfg):
         "e13": (["strategy_lora_b"], "rare_weighted", False),
         "e14": (["strategy_lora_multi"], "uniform", False),
         "e15": (["strategy_lora_multi"], "rare_weighted", False),
+        # Confirmatory study: matched multi-room copy-paste vs wide-seam
+        # exemplar inpainting under the exposure-parity sampler.
+        "e16": (["strategy_c_copy_paste_matched"], "paired_variant", False),
+        "e17": (["strategy_c_wide_matched"], "paired_variant", False),
     }
     experiment_id = experiment_cfg["id"]
     if experiment_id not in expected:

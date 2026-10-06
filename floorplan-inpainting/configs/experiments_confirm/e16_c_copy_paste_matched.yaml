@@ -1,0 +1,14 @@
+id: e16
+method: Matched multi-room exemplar copy-paste (exposure-parity sampler)
+base_model_config: configs/baseline.yaml
+tracks: [agnostic]
+dataset:
+  sources: [strategy_c_copy_paste_matched]
+sampling:
+  # Same per-epoch plan order as e0 at the same seed; each real plan that has
+  # synthetic variants is swapped for one of them with this probability.
+  mode: paired_variant
+  variant_probability: 0.5
+budget:
+  steps_per_epoch: 35
+output_root: outputs/confirm

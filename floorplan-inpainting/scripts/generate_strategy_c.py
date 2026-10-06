@@ -27,11 +27,14 @@ def main():
     parser.add_argument("--qa-root")
     parser.add_argument("--retry-errors", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--strength", type=float, help="override generation.strength")
     args = parser.parse_args()
 
     config = load_yaml(args.config)
     if args.resolution:
         config["crop"]["output_size"] = args.resolution
+    if args.strength is not None:
+        config["generation"]["strength"] = float(args.strength)
     config["generation"]["cache_dir"] = str(resolve_path(
         args.model_cache or config["generation"]["cache_dir"]))
     coco, rare, train, image_dir = load_inputs(config)

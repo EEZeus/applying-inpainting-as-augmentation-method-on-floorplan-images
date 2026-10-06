@@ -158,6 +158,30 @@ def _compose_seed(original, warped_donor, editable, paste_mask, mode, feather_pi
     return seed, retention
 
 
+def seam_width_in_original_pixels(integration, transform):
+    """Seam width in original pixels.
+
+    ``seam_model_pixels`` (if set) fixes the seam in model space (512 px crop),
+    so every candidate's diffusion band covers the same number of SD latent
+    cells regardless of room size; otherwise the legacy ``seam_width_pixels``
+    in original pixels is used unchanged.
+    """
+    model_pixels = integration.get("seam_model_pixels")
+    if not model_pixels:
+        return int(integration["seam_width_pixels"])
+    scale = float(transform.output_size) / float(transform.padded_side)
+    return max(1, int(np.ceil(float(model_pixels) / scale)))
+
+
+def donor_stroke_mask(warped_donor, paste_mask, dark_threshold, dilation_px=3):
+    gray = cv2.cvtColor(warped_donor, cv2.COLOR_RGB2GRAY)
+    strokes = paste_mask & (gray <= float(dark_threshold))
+    if dilation_px > 0 and strokes.any():
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_px + 1, 2 * dilation_px + 1))
+        strokes = cv2.dilate(strokes.astype(np.uint8), kernel).astype(bool)
+    return strokes & paste_mask
+
+
 def _inpaint_mask(editable, paste_mask, seam_width):
     width = max(1, int(seam_width))
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * width + 1, 2 * width + 1))
@@ -227,9 +251,16 @@ def _prepare(candidate, indices, image_dir, config):
     seed_image, retention_mask = _compose_seed(
         original, warped, mask_result.safe_mask, paste_mask, compose_mode,
         config["integration"]["feather_pixels"])
-    generation_mask = (_inpaint_mask(mask_result.safe_mask, paste_mask,
-                                      config["integration"]["seam_width_pixels"])
+    integration = config["integration"]
+    seam_pixels = seam_width_in_original_pixels(integration, transform)
+    generation_mask = (_inpaint_mask(mask_result.safe_mask, paste_mask, seam_pixels)
                        if mode == "diffusion_inpaint" else np.zeros_like(paste_mask))
+    if mode == "diffusion_inpaint" and integration.get("protect_donor_strokes", False):
+        # Keep the donor's dark strokes (label text, symbols) out of the
+        # diffusion mask so a wide seam cannot garble them; they stay in the
+        # retention mask and are therefore checked by the semantic QC.
+        generation_mask &= ~donor_stroke_mask(warped, paste_mask, mask_result.dark_threshold,
+                                              int(integration.get("donor_stroke_dilation_px", 3)))
     if mode == "diffusion_inpaint":
         retention_mask &= ~generation_mask
     donor_transform = CropTransform.from_bbox(donor["bbox"], donor_image.shape[1], donor_image.shape[0],
@@ -247,6 +278,8 @@ def _prepare(candidate, indices, image_dir, config):
         "editable_crop": mask_result.safe_mask[transform.y0:transform.y1, transform.x0:transform.x1],
         "donor_crop": donor_transform.forward_image(donor_image),
         "affine_matrix": matrix.tolist(),
+        "seam_original_pixels": int(seam_pixels),
+        "model_scale": float(transform.output_size) / float(transform.padded_side),
     }
 
 
@@ -359,6 +392,9 @@ def _run_strategy_c(config, coco, rare_config, train_ids, image_dir, output_dir,
             "attempt": sum(r["sample_id"] == candidate.sample_id for r in records) + 1,
             "output_file": f"full_images/{candidate.sample_id}.png",
             "generation_time_seconds": 0.0,
+            "seam_original_pixels": prepared["seam_original_pixels"],
+            "model_scale": prepared["model_scale"],
+            "model_mask_pixels": int(prepared["model_mask"].sum()),
         }
         minimum = _minimum_mutable_fraction(config["mask"], candidate.category_id)
         if mask_result.mutable_fraction < minimum or not prepared["paste_mask"].any():

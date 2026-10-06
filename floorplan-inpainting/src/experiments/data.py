@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import ConcatDataset, Dataset, RandomSampler, WeightedRandomSampler
+from torch.utils.data import ConcatDataset, Dataset, RandomSampler, Sampler, WeightedRandomSampler
 
 from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform
@@ -28,6 +28,18 @@ SOURCE_FILES = {
                                       "data/augmented_c/diffusion_inpaint", "full_plan"),
     "strategy_lora_b": ("data/augmented_lora_b/instances_train_augmented.json",
                          "data/augmented_lora_b", "full_plan"),
+    # Confirmatory study (e16/e17): two multi-room datasets composed from the
+    # SAME accepted (target, donor) pairs with the same builder seed, so they
+    # differ only in how the rare exemplar pixels were integrated.
+    "strategy_c_copy_paste_matched": ("data/augmented_c_matched/copy_paste_multi/instances_train_augmented.json",
+                                      "data/augmented_c_matched/copy_paste_multi", "full_plan"),
+    "strategy_c_wide_matched": ("data/augmented_c_matched/inpaint_wide_multi/instances_train_augmented.json",
+                                "data/augmented_c_matched/inpaint_wide_multi", "full_plan"),
+}
+
+MATCHED_SOURCE_SUBDIRS = {
+    "strategy_c_copy_paste_matched": "copy_paste_multi",
+    "strategy_c_wide_matched": "inpaint_wide_multi",
 }
 
 
@@ -123,7 +135,9 @@ class ExperimentCocoDataset(Dataset):
                         info.get("strategy")]
                 occurrences.append({"category_id": int(annotation["category_id"]), "source": source})
             self.records.append({"image_id": info["id"], "sample_kind": sample_kind,
-                                 "source_name": source_name, "occurrences": occurrences})
+                                 "source_name": source_name, "occurrences": occurrences,
+                                 "source_image_id": int(info.get("source_image_id", info["id"])),
+                                 "synthetic": bool(info.get("synthetic", False))})
 
     def __len__(self):
         return len(self.images)
@@ -191,9 +205,70 @@ def _bounded_rare_weights(records, original_counts, rare_ids, sampling_cfg):
     return np.asarray(result, dtype=np.float64)
 
 
+class FixedOrderSampler(Sampler):
+    """Yield a precomputed index list (used by the paired-variant design)."""
+
+    def __init__(self, indices):
+        self.indices = [int(index) for index in indices]
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.indices)
+
+
+def paired_variant_indices(records, seed, samples_per_epoch, variant_probability):
+    """Exposure-parity sampling: e0's plan order, synthetic variants swapped in.
+
+    Real plans are the non-synthetic records. Their per-epoch order is
+    ``torch.randperm(n_real)`` from a generator seeded with ``seed``, which is
+    exactly the order RandomSampler(replacement=False) gives e0 for the same
+    seed (e0's records are the same real plans sorted by image id). Each drawn
+    real plan is then replaced, with probability ``variant_probability``, by
+    one of its own synthetic variants (uniform choice), using an independent
+    generator. Every real plan therefore occupies exactly one step per epoch,
+    the step budget is unchanged, and two arms that share a seed see the same
+    plan sequence; they differ only in the pixels of the swapped draws.
+    """
+    real = sorted((index for index, record in enumerate(records) if not record.get("synthetic")),
+                  key=lambda index: int(records[index]["image_id"]))
+    if len(real) != int(samples_per_epoch):
+        raise ValueError(f"paired_variant needs one step per real plan: {len(real)} real plans, "
+                         f"{samples_per_epoch} steps per epoch")
+    if not 0.0 <= float(variant_probability) <= 1.0:
+        raise ValueError("variant_probability must lie in [0, 1]")
+    variants = {}
+    for index, record in enumerate(records):
+        if record.get("synthetic"):
+            variants.setdefault(int(record["source_image_id"]), []).append(index)
+    real_ids = {int(records[index]["image_id"]) for index in real}
+    unknown = sorted(set(variants) - real_ids)
+    if unknown:
+        raise ValueError(f"Synthetic variants trace to plans outside the real pool: {unknown}")
+    for key in variants:
+        variants[key].sort(key=lambda index: int(records[index]["image_id"]))
+    order = torch.randperm(len(real), generator=torch.Generator().manual_seed(int(seed))).tolist()
+    # Separate stream for the swap decisions so the plan order never depends on them.
+    swap_rng = np.random.default_rng([int(seed), 7919])
+    indices = []
+    for position in order:
+        index = real[position]
+        options = variants.get(int(records[index]["image_id"]), [])
+        draw = swap_rng.random()
+        pick = int(swap_rng.integers(len(options))) if options else -1
+        if options and draw < float(variant_probability):
+            index = options[pick]
+        indices.append(index)
+    return indices
+
+
 def build_epoch_sampler(records, experiment_cfg, seed, samples_per_epoch, original_counts, rare_ids):
     """Build a deterministic fixed-budget sampler with an optional crop mixture."""
     sampling = experiment_cfg["sampling"]
+    if sampling["mode"] == "paired_variant":
+        return FixedOrderSampler(paired_variant_indices(
+            records, seed, samples_per_epoch, float(sampling.get("variant_probability", 0.5))))
     weighted = sampling["mode"] == "rare_weighted"
     has_crops = any(record["sample_kind"] == "rare_crop" for record in records)
     if not weighted and not has_crops:

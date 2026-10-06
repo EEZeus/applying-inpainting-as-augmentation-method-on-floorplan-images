@@ -1,4 +1,5 @@
 import csv
+import gzip
 import json
 import time
 from pathlib import Path
@@ -15,7 +16,8 @@ from src.training.engine import predict_coco
 from src.utils.config import load_yaml, resolve_path, split_dir
 
 
-def evaluate_checkpoint(dataset_cfg, model_cfg, rare_cfg, checkpoint, split="test", output_dir="outputs/metrics"):
+def evaluate_checkpoint(dataset_cfg, model_cfg, rare_cfg, checkpoint, split="test", output_dir="outputs/metrics",
+                        dump_predictions=False):
     annotation_file = resolve_path(dataset_cfg["annotation_file"])
     ids = read_split(split_dir(dataset_cfg["split_dir"]) / f"{split}.txt")
     dataset = FloorplanCocoDataset(resolve_path(dataset_cfg["image_dir"]), annotation_file, ids, DetectionTransform())
@@ -51,5 +53,13 @@ def evaluate_checkpoint(dataset_cfg, model_cfg, rare_cfg, checkpoint, split="tes
     (output_dir / "baseline_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     with (output_dir / "baseline_per_class.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys()); writer.writeheader(); writer.writerows(rows)
+    if dump_predictions:
+        # Raw (unthresholded) COCO results, so subset / bootstrap AP can be
+        # recomputed offline without re-running the model.
+        payload = {"image_ids": [int(i) for i in ids], "split": split,
+                   "annotation_file": str(annotation_file), "checkpoint": str(checkpoint),
+                   "bbox": bbox_results, "segm": masks}
+        with gzip.open(output_dir / "coco_results.json.gz", "wt", encoding="utf-8") as handle:
+            json.dump(payload, handle)
     predictions = compact_predictions(bbox_results, masks, model_cfg["score_threshold"], ids)
     return metrics, rows, predictions

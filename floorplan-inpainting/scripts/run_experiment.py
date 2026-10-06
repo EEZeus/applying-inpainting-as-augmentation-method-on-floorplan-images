@@ -8,9 +8,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import torch
+
 from src.evaluation.evaluate import evaluate_checkpoint
 from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform
+from src.experiments.data import MATCHED_SOURCE_SUBDIRS
 from src.experiments.train import train_experiment
 from src.utils.config import load_yaml
 from src.utils.config import resolve_path, split_dir
@@ -33,6 +36,11 @@ def main():
     parser.add_argument("--eval-split", default="test", choices=["val", "test"])
     parser.add_argument("--eval-tag", default="eval",
                         help="subdir name under output_root/<track>/<id>/ for eval-only results")
+    parser.add_argument("--dump-predictions", action="store_true",
+                        help="eval-only: also write raw COCO results (coco_results.json.gz)")
+    parser.add_argument("--matched-data-root",
+                        help="e16/e17: directory holding copy_paste_multi/ and inpaint_wide_multi/ "
+                             "(default data/augmented_c_matched)")
     parser.add_argument("--replacement-percentage", type=float,
                         help="E14/E15 target percentage of common rooms changed per synthetic plan")
     parser.add_argument("--percentage-jitter", type=float,
@@ -41,6 +49,16 @@ def main():
     experiment = load_yaml(args.config)
     if args.output_root:
         experiment["output_root"] = args.output_root
+    if args.matched_data_root:
+        root = resolve_path(args.matched_data_root)
+        overrides = {}
+        for source in experiment["dataset"]["sources"]:
+            if source not in MATCHED_SOURCE_SUBDIRS:
+                raise ValueError(f"--matched-data-root does not apply to source {source}")
+            folder = root / MATCHED_SOURCE_SUBDIRS[source]
+            overrides[source] = {"annotation_file": str(folder / "instances_train_augmented.json"),
+                                 "image_dir": str(folder), "sample_kind": "full_plan"}
+        experiment["dataset"]["source_overrides"] = overrides
 
     if args.eval_checkpoint:
         checkpoint = Path(args.eval_checkpoint).resolve()
@@ -53,9 +71,14 @@ def main():
         out_dir = resolve_path(experiment["output_root"]) / args.track / experiment["id"] / args.eval_tag
         out_dir.mkdir(parents=True, exist_ok=True)
         metrics, rows, _ = evaluate_checkpoint(
-            dataset_cfg, model_cfg, rare_cfg, checkpoint, args.eval_split, out_dir / "metrics")
+            dataset_cfg, model_cfg, rare_cfg, checkpoint, args.eval_split, out_dir / "metrics",
+            dump_predictions=args.dump_predictions)
+        state = torch.load(checkpoint, map_location="cpu")
         result = {"mode": "eval_only", "eval_checkpoint": str(checkpoint),
+                  "checkpoint_epoch": int(state.get("epoch", -1)) if isinstance(state, dict) else -1,
+                  "split_dir": str(split_dir(dataset_cfg["split_dir"])),
                   "eval_split": args.eval_split, "test_metrics": metrics, "per_class": rows}
+        del state
         (out_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps({"eval_checkpoint": str(checkpoint), "eval_split": args.eval_split,
                           "test_metrics": metrics}, ensure_ascii=False, indent=2))
