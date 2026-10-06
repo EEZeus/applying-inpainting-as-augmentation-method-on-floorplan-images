@@ -257,7 +257,8 @@ def interpretation(summary):
     for name, c in (confirm.get("tests") or {}).items():
         ci = c.get("ci95_seed_x_image") if c else None
         if c and not c.get("supported") and ci and ci[1] < SESOI:
-            out.append(f"For {names.get(name, name)} the upper 95% bound is {ci[1]:+.3f} AP, below the "
+            label = names.get(name, name) + (" (descriptive, not formally tested)" if c.get("tested") is False else "")
+            out.append(f"For {label} the upper 95% bound is {ci[1]:+.3f} AP, below the "
                        f"pre-registered smallest effect of interest (+{SESOI:.2f}); a practically relevant "
                        "gain is therefore excluded, not merely undetected.")
         elif c and not c.get("supported") and ci and ci[1] >= SESOI:
@@ -279,9 +280,9 @@ def interpretation(summary):
             out.append(f"Exploratory: e8 exceeds the exposure-parity copy-paste arm e16 by {c['delta']:+.3f} AP "
                        f"(95% CI {fmt_ci(c.get('ci95_seed_x_image'))}, one-sided p = {fmt_p(c['welch_p_one_sided'])}). "
                        f"e8 keeps the original sampler and saw {d8 / d16:.1f} times as many converted-room "
-                       f"occurrences per run ({d8:.0f} against {d16:.0f}). The difference therefore points at "
-                       "synthetic dose rather than exemplar pixels as the driver of the original copy-paste gain; "
-                       "it was not a pre-registered contrast.")
+                       f"occurrences per run ({d8:.0f} against {d16:.0f}), drawn from a slightly larger pool. The "
+                       "difference therefore points at synthetic dose, not at the exemplar pixels as such, as the "
+                       "driver of the original copy-paste gain; it was not a pre-registered contrast.")
     for track in ("multiclass", "agnostic"):
         rows = {r["arm"]: r for r in (rescore.get(track) or {}).get("rows", [])}
         positive = [a for a, r in rows.items() if r.get("ci95_seed_x_image") and r["ci95_seed_x_image"][0] > 0]
