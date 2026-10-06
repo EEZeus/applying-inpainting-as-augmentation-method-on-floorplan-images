@@ -8,8 +8,7 @@ frequencies are strongly long-tailed. Categories 1--10 hold 1551 of the 1633
 annotations. The six categories designated primary-rare (11 Allg.\
 Verkehrsfl\"ache, 12 Abstellraum, 13 Versammlungsraum, 14 Schacht, 15 Garderobe,
 16 Sanit\"arraum) hold 70 annotations, 30 of them in training and 17 in test.
-Two further categories, 17 Werkstatt and 18 Speiseraum, have too little support
-to score and are reported separately. Category 19 Labor has no test instances at
+Two further categories, 17 Werkstatt and 18 Speiseraum, have too little support to score and are excluded from quantitative claims. Category 19 Labor has no test instances at
 all and is excluded from every quantitative claim. Section~\ref{sec:dataset}
 gives the per-split counts and Figure~\ref{fig:classdist} plots them.
 
@@ -91,5 +90,14 @@ Two evaluations are needed. One classifies ground-truth regions, which removes
 detector error entirely and isolates the classification bottleneck. The other
 measures end-to-end two-stage mask AP, which can be compared directly against
 the fine-tuned detectors on the same test split. Success is a diagnosis: whether
-the residual error is a localisation problem or a classification problem, and
-whether synthetic crops move the classification number in either direction.
+the residual error is a localisation problem or a classification problem, and whether synthetic crops move the classification number in either direction.
+
+\subsubsection{Goal 5: Confirm the surviving signals without the evaluation's confounds}
+
+A close audit of the first four goals' evaluation found confounds that could
+hide or inflate an augmentation effect: the cross-validation reused the plans
+that had selected each checkpoint, augmented arms saw each real plan less
+often than the baseline, and the diffusion arm regenerated only a band about
+one latent cell wide. Goal 5 repairs these and re-tests the surviving signals
+in a pre-registered study with fresh seeds. Success is a confirmatory answer
+with a confidence interval, whichever way it falls.

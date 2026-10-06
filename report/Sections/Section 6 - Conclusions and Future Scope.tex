@@ -18,14 +18,10 @@ Goal 2 was achieved in the sense its statement anticipated. A defensible answer
 was obtained, and the answer is a null result. Across 84 Mask R-CNN training
 runs, no augmentation arm produced a difference from the unaugmented baseline
 that the data supports. Every paired sign test on the three-seed grid returned
-$p \ge 0.25$, the floor of the test at $n=3$. Nine of the thirteen augmented
-arms scored below baseline on the class-agnostic track, with the LoRA conversion
-worst at $-0.057$. The cross-validation over 21 held-out images reproduced the
+$p \ge 0.25$, the floor of the test at $n=3$. Nine of the thirteen augmented arms scored below baseline on the class-agnostic track, with Strategy A plus crops and weighting ($-0.065$) and the LoRA conversion ($-0.057$) the worst. The cross-validation over 21 held-out images reproduced the
 same ordering. The single result with a consistent sign is exemplar copy-paste
 at $+0.045$ class-agnostic AP, positive in all five folds at $p = 0.0625$, and
-copy-paste is the control arm that contains no generated pixels. That outcome
-runs against the hypothesis under test, and Ghiasi et al.\
-\cite{ghiasi2021copypaste} would have predicted it.
+copy-paste is the control arm that contains no generated pixels. That outcome runs against the hypothesis under test, and Ghiasi et al.\ \cite{ghiasi2021copypaste} would have predicted it. Goal 5 shows that even this signal was inflated by the evaluation.
 
 Goal 3 changed the framing of the project. SAM 3 without any augmentation
 reached $0.713$ class-agnostic and $0.115$ multiclass mask AP, exceeding the
@@ -34,21 +30,38 @@ is about two and a half times the largest augmentation delta measured anywhere
 in the grid. Under augmentation SAM 3 showed a $+0.032$ multiclass gain from
 copy-paste, but on a single seed, inside the $0.002$ to $0.018$ seed-noise band
 measured on the grid, and accompanied by a class-agnostic loss under all three
-augmentations. The sign of the copy-paste effect is therefore opposite in the
-two backbones. That inconsistency is itself the finding: at this data scale the
-augmentation effect is not a stable property of the augmentation.
+augmentations. The sign of the copy-paste effect is therefore opposite in the two backbones, but the augmented SAM 3 runs also received about twice the optimiser steps of their baseline, so these single runs cannot show whether the augmentation effect depends on the backbone.
 
 Goal 4 supplied the diagnosis. Handed perfect ground-truth crops, with no
 detector error whatsoever, a frozen DINOv2-base encoder with a linear head
 yielded $0.454$ top-1 accuracy over 19 classes and exactly $0.000$ macro recall
-over the six primary-rare classes, in every arm and for both heads. Adding the
-171 synthetic rare crops lowered top-1 accuracy in both heads and left rare
-recall at zero. The end-to-end two-stage system reached $0.091$ mask AP, below
+over the six primary-rare classes, in every arm and for both heads. Adding 171 rare-class crops, 74 of them synthetic, lowered top-1 accuracy in both heads and left rare recall at zero. The end-to-end two-stage system reached $0.091$ mask AP, below
 both fine-tuned detectors. Combined with the class-agnostic results, this
 locates the failure precisely. Room localisation is largely solved on this
 dataset at $0.59$ to $0.71$ AP, while room typing is not, for the tail and for
-several head classes as well. No augmentation of the training pixels was going
-to fix a classification problem of that shape.
+several head classes as well. No augmentation of the training pixels was going to fix a classification problem of that shape.
+
+Goal 5 settled what the first four goals could not. Re-scoring all 84 grid
+checkpoints without validation-selection leakage shrank the copy-paste gain
+from $+0.036$ to $+0.011$ class-agnostic AP and showed five arms (Strategy A
+with crops, feather blending and both LoRA arms) to be measurably harmful to
+room localisation. The pre-registered confirmation with 12 fresh seeds per arm
+then supported neither hypothesis: copy-paste gained $+0.011$ (95\,\% CI
+$-0.007$ to $+0.029$), and exemplar inpainting with a three-latent-cell
+diffusion band and exposure-parity sampling changed AP by $-0.004$ (95\,\% CI
+$-0.019$ to $+0.009$). The inpainting result is the more informative of the
+two, because its upper bound lies below the pre-registered smallest effect of
+interest, so a practically relevant class-agnostic gain is excluded rather than
+merely undetected. An exploratory contrast suggests that what remains of the
+copy-paste effect tracks the synthetic dose, not the exemplar pixels.
+A second pre-registered study re-tested the multiclass signals. Strategy A
+led the baseline by $+0.006$ AP with a one-sided seed-level $p = 0.034$ and
+the same sign in all three held-out buildings, but most of the gain came from
+one building and the interval over seeds and images ($-0.004$ to $+0.019$)
+includes zero, so it does not meet the pre-registered criterion. It is the
+only place in the project where generated pixels point in a positive direction,
+and it is small, concentrated on frequent classes, and unconfirmed. Rare-class
+AP stayed below $0.002$ in every arm.
 
 The wider conclusion is a scope statement rather than a defeat. The generative
 augmentation literature surveyed in Section~3 reports its gains on benchmarks
@@ -70,7 +83,7 @@ the augmentation trustworthy also removed most of what carried the class signal.
 
 \subsection*{Future scope}
 
-Four directions follow from the measurements rather than from speculation,
+Five directions follow from the measurements rather than from speculation,
 ordered by expected value per unit of effort.
 
 \emph{Read the drawing's own text.} Every plan in this dataset prints the room
@@ -103,6 +116,13 @@ built but was never run through the full grid. It is the cheapest of these to
 complete. TMI \cite{song2026tmi} additionally predicts that the prompt-driven
 and exemplar-driven families are complementary and that neither works alone,
 which matches what was observed here and makes the combination worth one run.
+
+\emph{Vary the synthetic dose explicitly and fix the training protocol.} The
+only augmentation signal that survived re-scoring tracks how many synthetic
+rooms an arm sees, not how they were made. A dose-response study, run with a
+batch size above one or frozen BatchNorm and a schedule long enough that the
+baseline has converged, would test that directly and is cheap with the
+generators that already exist.
 
 \emph{Collect more rare-class test data before running anything else.} This is
 the least interesting recommendation and the most important one. Seventeen rare

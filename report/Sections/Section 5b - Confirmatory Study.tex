@@ -1,0 +1,261 @@
+\section{Confirmatory Study}
+\label{sec:confirm}
+
+The original evaluation could not separate a real augmentation effect from its own confounds: the rotated cross-validation reused the validation plans that had selected each checkpoint, augmented arms saw each real plan less often than the baseline, the copy-paste and diffusion arms were built from differently composed datasets, and the diffusion arm regenerated a band about one latent cell wide. This section reports a study designed to remove those confounds. Its hypotheses, endpoint, gates and tests were fixed in \code{docs/preregistration_confirm.md} and committed before any job ran.
+
+\noindent Pre-registration record: \code{783f6090e81aafa1ca40aae0069aa3bdc9647c46} (commit), recorded in \code{outputs/confirm/preregistration_record.txt}.
+
+\subsection{Protocol}
+\begin{itemize}
+
+  \item \textbf{Endpoint.} class-agnostic COCO mask AP@[.50:.95] of the epoch-25 checkpoint (last.pth), which is never selected on validation data, evaluated on all 21 held-out plans (10 validation + 11 test plans, projects P02, P04 and P07).
+  \item \textbf{Arms.} e0 original plans; e8 exact replication of the grid's copy-paste arm; e16 matched copy-paste; e17 matched wide-seam exemplar inpainting. e16 and e17 are composed from the same (target, donor) pairs with the same builder seed, so they differ only in pixels.
+  \item \textbf{Exposure parity.} e16 and e17 use a paired-variant sampler: every epoch follows e0's plan order for the same seed, so every source plan occupies exactly one step per epoch, as in e0; a plan that has synthetic variants is shown as one of them with probability 0.5. Arms with the same seed therefore see the same plan sequence and differ only in the pixels of the swapped steps.
+  \item \textbf{Wide seam.} the diffusion band is 24 model pixels (3 Stable Diffusion latent cells) per candidate; the donor's dark strokes (labels, symbols) are excluded from the diffusion mask and checked by the retention QC.
+  \item \textbf{Seeds and tests.} 12 fresh seeds (1001-1012) per arm. H1 e8 > e0 and H2 e17 > e0 by one-sided Welch tests with Holm correction; a hypothesis is supported only if Holm rejects and the two-level (seed $\times$ image) bootstrap 95\% CI excludes zero. H3 e17 > e16 is tested only if H2 is supported.
+\end{itemize}
+
+\subsection{Wide-seam generation and gates}
+
+\begin{table}[H]
+\centering
+\caption{Wide-seam generation pilot over all planned candidates. The rule picks the highest strength with acceptance $\geq 0.80$, mean donor-stroke retention $\geq 0.95$ and a median diffusion band of $\geq 30$ latent cells.}
+\label{tab:cwide}
+\small
+\begin{tabular}{@{}rrrrrrrl@{}}
+\toprule
+Strength & Attempted & Accepted & Rate & Retention & Band (cells) & Seam (px) & Passes \\
+\midrule
+0.5 & 52 & 45 & 0.87 & 1.000 & 141 & 16 & yes \\
+0.75 & 52 & 45 & 0.87 & 1.000 & 141 & 16 & yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The rule selected strength 0.75. Donor-stroke retention is 1.0 by construction, because the donor's dark strokes are excluded from the diffusion mask; that criterion guards against regressions rather than discriminating between strengths. The diffusion band is reported in Stable Diffusion latent cells (8 x 8 model pixels).
+
+Copy-paste accepted 46 and wide-seam inpainting accepted 45 of the planned pairs; 44 pairs were accepted in both and composed into 33 synthetic plans (44 converted rooms over 15 source plans).
+
+Gates: e0: runs (baseline runs because at least one comparison arm runs); e8: runs (mean(e8 - e0) over grid seeds on heldout21 last.pth = +0.0115); e16: runs (matched datasets built; pairs=44, strength=0.75); e17: runs (matched datasets built; pairs=44, strength=0.75).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{c_wide_example.png}\\[1ex]
+\includegraphics[width=\textwidth]{c_copypaste_twin.png}
+\caption{The same matched pair integrated by wide-seam inpainting (top, e17) and by copy-paste (bottom, e16).}
+\label{fig:cwide}
+\end{figure}
+
+\subsection{Leakage-free re-score of the existing grid}
+
+Every grid checkpoint's last.pth was re-evaluated on the 21 held-out plans. These numbers are exploratory: they re-use the seeds that produced the original ranking, so they serve to correct the cross-validation and to drive the futility gate, not to confirm an effect. Differences are against e0; CIs resample seeds and images; p-values are one-sided Welch tests, Holm-adjusted over the 13 arms of each track.
+
+\begin{table}[H]
+\centering
+\caption{Re-score, agnostic track: mask AP of \code{last.pth} on the 21 held-out plans (mean $\pm$ s.d. over seeds 42, 123, 2026), difference from e0 with its seed $\times$ image bootstrap 95\% CI and Holm-adjusted one-sided Welch $p$; the last column repeats the original grid value (best.pth, 11 test plans).}
+\label{tab:rescoreagnostic}
+\small
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Arm & Method & AP (21 plans) & $\Delta$ & 95\% CI & Holm $p$ & grid AP \\
+\midrule
+e0 & Original (no aug) & 0.592 $\pm$ 0.017 & -- & -- & -- & 0.588 \\
+e1 & Rare-weighted sampling & 0.591 $\pm$ 0.013 & -0.001 & [-0.025, +0.024] & 1.000 & 0.591 \\
+e2 & Strategy A & 0.591 $\pm$ 0.015 & -0.001 & [-0.032, +0.031] & 1.000 & 0.594 \\
+e3 & Strategy A + w & 0.572 $\pm$ 0.020 & -0.020 & [-0.053, +0.015] & 1.000 & 0.563 \\
+e4 & Strategy A + crops & 0.525 $\pm$ 0.067 & -0.066 & [-0.130, -0.001] & 1.000 & 0.548 \\
+e5 & Strategy A + crops + w & 0.511 $\pm$ 0.070 & -0.081 & [-0.160, -0.017] & 1.000 & 0.523 \\
+e6 & Strategy B & 0.578 $\pm$ 0.002 & -0.014 & [-0.036, +0.014] & 1.000 & 0.601 \\
+e7 & Strategy B + w & 0.568 $\pm$ 0.002 & -0.024 & [-0.046, +0.000] & 1.000 & 0.567 \\
+e8 & C copy-paste (multi-room) & 0.603 $\pm$ 0.009 & +0.011 & [-0.010, +0.043] & 1.000 & 0.624 \\
+e9 & C feather-blend & 0.560 $\pm$ 0.011 & -0.032 & [-0.055, -0.004] & 1.000 & 0.573 \\
+e10 & C diffusion inpaint (6 px seam) & 0.586 $\pm$ 0.015 & -0.006 & [-0.029, +0.022] & 1.000 & 0.586 \\
+e11 & C diffusion inpaint + w & 0.563 $\pm$ 0.024 & -0.028 & [-0.062, +0.009] & 1.000 & 0.567 \\
+e12 & LoRA Strategy B & 0.542 $\pm$ 0.011 & -0.050 & [-0.080, -0.024] & 1.000 & 0.531 \\
+e13 & LoRA Strategy B + w & 0.556 $\pm$ 0.024 & -0.036 & [-0.069, -0.002] & 1.000 & 0.567 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the agnostic track, CIs above zero: none; CIs below zero: e4, e5, e9, e12, e13; Holm-significant: none.
+
+\begin{table}[H]
+\centering
+\caption{Re-score, multiclass track: mask AP of \code{last.pth} on the 21 held-out plans (mean $\pm$ s.d. over seeds 42, 123, 2026), difference from e0 with its seed $\times$ image bootstrap 95\% CI and Holm-adjusted one-sided Welch $p$; the last column repeats the original grid value (best.pth, 11 test plans).}
+\label{tab:rescoremulticlass}
+\small
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Arm & Method & AP (21 plans) & $\Delta$ & 95\% CI & Holm $p$ & grid AP \\
+\midrule
+e0 & Original (no aug) & 0.091 $\pm$ 0.002 & -- & -- & -- & 0.081 \\
+e1 & Rare-weighted sampling & 0.101 $\pm$ 0.002 & +0.010 & [+0.001, +0.024] & 0.030 & 0.098 \\
+e2 & Strategy A & 0.107 $\pm$ 0.005 & +0.016 & [+0.007, +0.030] & 0.099 & 0.103 \\
+e3 & Strategy A + w & 0.096 $\pm$ 0.005 & +0.005 & [-0.006, +0.024] & 1.000 & 0.091 \\
+e4 & Strategy A + crops & 0.072 $\pm$ 0.005 & -0.020 & [-0.031, -0.008] & 1.000 & 0.079 \\
+e5 & Strategy A + crops + w & 0.074 $\pm$ 0.010 & -0.018 & [-0.034, +0.004] & 1.000 & 0.061 \\
+e6 & Strategy B & 0.098 $\pm$ 0.003 & +0.007 & [-0.003, +0.015] & 0.207 & 0.090 \\
+e7 & Strategy B + w & 0.105 $\pm$ 0.006 & +0.014 & [+0.003, +0.030] & 0.271 & 0.104 \\
+e8 & C copy-paste (multi-room) & 0.102 $\pm$ 0.007 & +0.011 & [-0.000, +0.025] & 0.532 & 0.095 \\
+e9 & C feather-blend & 0.096 $\pm$ 0.010 & +0.005 & [-0.008, +0.018] & 1.000 & 0.086 \\
+e10 & C diffusion inpaint (6 px seam) & 0.093 $\pm$ 0.005 & +0.002 & [-0.010, +0.015] & 1.000 & 0.077 \\
+e11 & C diffusion inpaint + w & 0.089 $\pm$ 0.011 & -0.003 & [-0.017, +0.013] & 1.000 & 0.083 \\
+e12 & LoRA Strategy B & 0.091 $\pm$ 0.007 & -0.000 & [-0.012, +0.011] & 1.000 & 0.080 \\
+e13 & LoRA Strategy B + w & 0.096 $\pm$ 0.007 & +0.005 & [-0.006, +0.018] & 1.000 & 0.087 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the multiclass track, CIs above zero: e1, e2, e7; CIs below zero: e4; Holm-significant: e1.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_rescore_last.pdf}
+\caption{Re-score of the existing grid: filled markers are \code{last.pth} on the 21 held-out plans (mean $\pm$ s.d. over three seeds), hollow markers the original grid values (best.pth on the 11 test plans).}
+\label{fig:rescore}
+\end{figure}
+
+\subsection{Confirmatory results}
+
+\begin{table}[H]
+\centering
+\caption{Confirmatory runs, class-agnostic track: mask AP of \code{last.pth}, mean $\pm$ s.d. over fresh seeds.}
+\label{tab:confirmarms}
+\small
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Arm & Method & $n$ & AP (21) & AP50 (21) & AP (11 test) & AP (10 val) \\
+\midrule
+e0 & Original (no aug) & 12 & 0.590 $\pm$ 0.015 & 0.754 $\pm$ 0.021 & 0.578 $\pm$ 0.025 & 0.606 $\pm$ 0.013 \\
+e8 & Copy-paste (e8 replication) & 12 & 0.600 $\pm$ 0.020 & 0.757 $\pm$ 0.022 & 0.590 $\pm$ 0.031 & 0.614 $\pm$ 0.014 \\
+e16 & Matched copy-paste & 12 & 0.582 $\pm$ 0.020 & 0.741 $\pm$ 0.021 & 0.567 $\pm$ 0.027 & 0.602 $\pm$ 0.020 \\
+e17 & Matched wide-seam inpainting & 12 & 0.585 $\pm$ 0.013 & 0.751 $\pm$ 0.018 & 0.570 $\pm$ 0.019 & 0.605 $\pm$ 0.016 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Pre-registered contrasts (H1--H3) and descriptive contrasts. $\Delta$ is treatment minus control; the CI resamples seeds within arm and the 21 held-out plans jointly; $p$-values are one-sided.}
+\label{tab:confirmtests}
+\small
+\begin{tabular}{@{}lrrrrrrl@{}}
+\toprule
+Contrast & $\Delta$ & 95\% CI & Welch $p$ & Holm $p$ & Perm.\ $p$ & $g$ & Supported \\
+\midrule
+H1: e8 - e0 & +0.011 & [-0.007, +0.029] & 0.082 & 0.163 & 0.080 & 0.57 & no \\
+H2: e17 - e0 & -0.004 & [-0.019, +0.009] & 0.774 & 0.774 & 0.776 & -0.30 & no \\
+H3: e17 - e16 & +0.003 & [-0.013, +0.018] & 0.339 & -- & 0.339 & 0.17 & no \\
+e16 - e0 (descr.) & -0.007 & [-0.024, +0.010] & 0.837 & -- & 0.838 & -0.40 & -- \\
+e8 - e16 (descr.) & +0.018 & [-0.000, +0.036] & 0.020 & -- & 0.020 & 0.86 & -- \\
+e17 - e16 (descr.) & +0.003 & [-0.013, +0.017] & 0.339 & -- & 0.339 & 0.17 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+H1 (exact replication of copy-paste e8 against e0): $\Delta$ = +0.011 AP, 95\% CI [-0.007, +0.029], one-sided Welch p = 0.082, Holm-adjusted p = 0.163, permutation p = 0.080, Hedges' g = 0.57 (n = 12 vs 12 seeds). The pre-registered criterion is not met: the hypothesis is not supported.
+
+H2 (wide-seam exemplar inpainting e17 against e0): $\Delta$ = -0.004 AP, 95\% CI [-0.019, +0.009], one-sided Welch p = 0.774, Holm-adjusted p = 0.774, permutation p = 0.776, Hedges' g = -0.30 (n = 12 vs 12 seeds). The pre-registered criterion is not met: the hypothesis is not supported.
+
+H3 (e17 against matched copy-paste e16, i.e. the value of the generated pixels): $\Delta$ = +0.003 AP, 95\% CI [-0.013, +0.018], one-sided Welch p = 0.339, permutation p = 0.339, Hedges' g = 0.17 (n = 12 vs 12 seeds). Not tested, because H2 was not supported (fixed sequence); reported descriptively.
+
+H1 per held-out project: P02 +0.009, P04 +0.008, P07 +0.011; on the 11 original test plans +0.012, on the 10 validation plans +0.009, AP50 +0.003.
+
+H2 per held-out project: P02 -0.001, P04 -0.001, P07 -0.010; on the 11 original test plans -0.008, on the 10 validation plans -0.001, AP50 -0.003.
+
+H3 per held-out project: P02 +0.003, P04 -0.002, P07 +0.003; on the 11 original test plans +0.003, on the 10 validation plans +0.003, AP50 +0.011.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_confirm_runs.pdf}
+\caption{Confirmatory runs per arm.}
+\label{fig:confirmruns}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig_confirm_contrasts.pdf}
+\caption{Contrasts with seed $\times$ image bootstrap 95\% CIs.}
+\label{fig:confirmcontrasts}
+\end{figure}
+
+\subsection{Interpretation of the class-agnostic confirmation}
+
+No confirmatory hypothesis is supported. The study removes the confounds of the original grid and replaces its uninterpretable sign tests with interval estimates: every pre-registered effect is bounded above by +0.029 AP.
+
+For copy-paste (H1) the interval [-0.007, +0.029] still admits an effect of +0.02; the point estimate +0.011 is positive in 3 of 3 held-out buildings, so the data neither confirm nor exclude a small benefit.
+
+For wide-seam exemplar inpainting (H2) the upper 95\% bound is +0.009 AP, below the pre-registered smallest effect of interest (+0.02); a practically relevant gain is therefore excluded, not merely undetected.
+
+For the generated pixels (H3) (descriptive, not formally tested) the upper 95\% bound is +0.018 AP, below the pre-registered smallest effect of interest (+0.02); a practically relevant gain is therefore excluded, not merely undetected.
+
+Exploratory: e8 exceeds the exposure-parity copy-paste arm e16 by +0.018 AP (95\% CI [-0.000, +0.036], one-sided p = 0.020). e8 keeps the original sampler and saw 2.2 times as many converted-room occurrences per run (558 against 256), drawn from a slightly larger pool. The difference therefore points at synthetic dose, not at the exemplar pixels as such, as the driver of the original copy-paste gain; it was not a pre-registered contrast.
+
+Exploratory re-score, multiclass track: arms whose interval excludes zero are e1, e2, e7. Rare-weighted sampling alone (e1, no generated pixels) already gains +0.010, while Strategy A (e2) gains +0.016; the part attributable to inpainted appearance is at most about +0.006, consistent with the oversampling confound of the fixed step budget. These are three-seed numbers that re-use the seeds which produced the original ranking; Section~\ref{sec:confirmmc} re-tests them with fresh seeds.
+
+Exploratory re-score, class-agnostic track: arms whose interval lies entirely below e0 are e4, e5, e9, e12, e13; these augmentations measurably harm room localisation.
+
+Limitations: the endpoint is class-agnostic only, because 17 rare test instances cannot resolve a rare-class effect; the 21 held-out plans come from three buildings; BatchNorm runs at batch size 1 in every arm; the synthetic pool is small (one to two converted rooms per synthetic plan, from at most 52 planned pairs).
+
+\subsection{Multiclass follow-up: Strategy A versus oversampling}
+\label{sec:confirmmc}
+
+The exploratory re-score left one open question: Strategy A (e2) and rare-weighted sampling (e1) both improved multiclass AP, and e1 adds no generated pixels. A second pre-registered study (\code{docs/preregistration_confirm_mc.md}) trained e0, e1 and e2 on the multiclass track with 12 fresh seeds each and scored last.pth on the 21 held-out plans. H4 tests e2 > e0; H5, tested only if H4 is supported, tests e2 > e1, i.e. whether inpainted appearance adds anything beyond oversampling.
+
+\begin{table}[H]
+\centering
+\caption{Multiclass follow-up: mask AP of \code{last.pth}, mean $\pm$ s.d. over 12 fresh seeds.}
+\label{tab:confirmmc}
+\small
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Arm & Method & $n$ & AP (21) & AP50 (21) & AP (11 test) & Rare AP \\
+\midrule
+e0 & Original (no aug) & 12 & 0.100 $\pm$ 0.006 & 0.146 $\pm$ 0.007 & 0.090 $\pm$ 0.005 & 0.0000 $\pm$ 0.0000 \\
+e1 & Rare-weighted sampling & 12 & 0.102 $\pm$ 0.009 & 0.149 $\pm$ 0.011 & 0.094 $\pm$ 0.013 & 0.0012 $\pm$ 0.0014 \\
+e2 & Strategy A (inpainting) & 12 & 0.106 $\pm$ 0.010 & 0.152 $\pm$ 0.011 & 0.103 $\pm$ 0.016 & 0.0018 $\pm$ 0.0030 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Multiclass follow-up contrasts (one-sided $p$; CI resamples seeds and the 21 held-out plans).}
+\label{tab:confirmmctests}
+\small
+\begin{tabular}{@{}lrrrrrl@{}}
+\toprule
+Contrast & $\Delta$ & 95\% CI & Welch $p$ & Perm.\ $p$ & $g$ & Supported \\
+\midrule
+H4: e2 - e0 & +0.006 & [-0.004, +0.019] & 0.034 & 0.032 & 0.77 & no \\
+H5: e2 - e1 & +0.004 & [-0.006, +0.015] & 0.131 & 0.130 & 0.45 & not tested \\
+e1 - e0 (descr.) & +0.002 & [-0.007, +0.013] & 0.275 & 0.271 & 0.24 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{fig_confirm_mc_runs.pdf}
+\caption{Multiclass follow-up runs: one dot per seed, diamond = mean $\pm$ s.d.}
+\label{fig:confirmmc}
+\end{figure}
+
+H4 is not supported: Strategy A changes multiclass mask AP by +0.006 (95\% CI [-0.004, +0.019], one-sided p = 0.034).
+
+H5 was not tested (fixed sequence). Descriptively, e2 - e1 = +0.004 (95\% CI [-0.006, +0.015]).
+
+Descriptively, rare-weighted sampling alone gives +0.002 (95\% CI [-0.007, +0.013], one-sided p = 0.275).
+
+Rare-class macro mask AP: e0 0.0000, e1 0.0012, e2 0.0018. It stays near zero in every arm, so any change in overall AP comes from the frequent classes, not from the rare classes the augmentation targets.
+
+The seed-level test alone would clear $p < 0.05$. The pre-registered rule also
+requires the interval that accounts for which plans happen to be held out to
+exclude zero, and it does not: most of the gain comes from one building (P07,
+$+0.017$; P02 and P04 about $+0.002$ each). Strategy A therefore shows a small
+multiclass improvement that is consistent in sign but not established at this
+test-set size. The fresh seeds also do not reproduce the exploratory
+oversampling gain ($+0.010$ in the re-score, $+0.002$ here), so the earlier
+reading that Strategy A's gain is mostly oversampling is not confirmed either;
+the difference between e2 and e1 ($+0.004$) remains unresolved.
+

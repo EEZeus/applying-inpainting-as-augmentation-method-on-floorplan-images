@@ -18,9 +18,7 @@ strong baseline. On LVIS the gain concentrates in the rare categories, at
 $+6.1$ mask AP, and remains complementary to a long-tail loss. That a crude
 pixel transplant outperforms more sophisticated composition was the single most
 influential result for this project. It motivated including direct copy-paste as
-an explicit control arm rather than only as an ablation, and that arm turned out
-to be the only augmentation with a consistent positive sign in our own
-measurements.
+an explicit control arm rather than only as an ablation, and that arm turned out to be the only augmentation with a consistent positive sign in our own first evaluation, although a pre-registered replication later reduced its gain to an inconclusive $+0.011$ AP.
 
 \paragraph{Xie et al., ``MosaicFusion: Diffusion Models as Data Augmenters for
 Large Vocabulary Instance Segmentation'' (IJCV 2024; arXiv:2309.13042)
@@ -216,4 +214,4 @@ is what the LoRA branch of this project attempted at rank 8. The technique
 itself worked as advertised, since training converged and the adapter
 demonstrably changed the generated output. Section~\ref{sec:results} shows that
 the adapted generator still did not produce more useful training data, and that
-on the class-agnostic track it produced the worst arm in the grid.
+on the class-agnostic track it produced the second-worst arm in the grid.

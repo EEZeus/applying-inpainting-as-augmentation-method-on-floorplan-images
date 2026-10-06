@@ -16,7 +16,7 @@ arms sit above it, led by Strategy B with rare weighting at $0.104 \pm 0.006$
 and Strategy A at $0.103 \pm 0.013$. Several sit below, with Strategy A plus
 crops plus weighting worst at $0.061 \pm 0.011$. The seed-to-seed standard
 deviations are of the same order as those differences. The three seeds of e2
-span $0.090$ to $0.121$, which straddles the entire range of arm means. A paired
+span $0.090$ to $0.121$, which covers most of the range of arm means ($0.061$ to $0.104$). A paired
 sign test over the seeds returns $p \ge 0.25$ for every arm, and $0.25$ is the
 smallest value the test can produce at $n = 3$. No multiclass difference in this
 grid is statistically supported.
@@ -70,8 +70,7 @@ e13 & LoRA Strategy B $+$ w    & $0.087 \pm 0.002$ & $+0.006$ & 1.00 & $0.0000$ 
 The class-agnostic track is the more legible half of the grid, because its
 standard deviations are proportionally much smaller. The baseline is
 $0.588 \pm 0.013$. The best arm is copy-paste at $0.624 \pm 0.020$, a difference
-of $+0.036$ with all three seeds positive. The worst is the LoRA conversion at
-$0.531 \pm 0.010$, a difference of $-0.057$ with all three seeds negative. Nine
+of $+0.036$ with all three seeds positive. The worst are Strategy A with crops and weighting at $0.523 \pm 0.042$ ($-0.065$) and the LoRA conversion at $0.531 \pm 0.010$ ($-0.057$, all three seeds negative). Nine
 of the thirteen augmented arms fall below the baseline: e3, e4, e5, e7, e9, e10,
 e11, e12 and e13. Only e1, e2, e6 and e8 are above it. Every paired sign test
 again returns $p \ge 0.25$, so none of these differences meets a conventional
@@ -131,11 +130,8 @@ e12 & LoRA Strategy B     & $0.134 \pm 0.020$ & $-0.008$ & 3/5  & 1.000 & $0.000
 
 The multiclass picture is unchanged. The six arms span $0.134$ to $0.154$
 against a baseline of $0.143 \pm 0.037$, the two diffusion-based arms are the
-two lowest, and no paired test falls below $p = 0.375$. Overall AP is roughly
-twice its grid value in every arm. That reflects the different composition of
-the evaluation set rather than any change in the models, since the folds include
-the former validation images, which come from a project whose plans the
-detectors find easier.
+two lowest, and no paired test falls below $p = 0.375$. Overall AP is 1.6 to 1.8 times its grid value in every arm. That reflects the different composition of
+the evaluation set rather than any change in the models, since the folds include the former validation images, which come from a project whose plans the detectors find easier and on which these checkpoints had been selected.
 
 The class-agnostic column holds the one result in the project with a consistent
 sign. Copy-paste scores $0.647 \pm 0.061$ against $0.602 \pm 0.044$, a
@@ -147,7 +143,7 @@ design and is stated as such. The remaining class-agnostic arms are further from
 significance still, at $p = 1.000$ for e1 and e10 and $p = 0.375$ for e6 and for
 the negative $-0.034$ of e12. The honest summary is that copy-paste shows a
 small positive effect that replicated across every fold and across both Mask
-R-CNN evaluations, and that the evidence is suggestive rather than conclusive.
+R-CNN evaluations, and that the evidence is suggestive rather than conclusive. The cross-validation scores only seed 42's selected checkpoints on folds that contain the selection images; the pre-registered, selection-free replication in Section~\ref{sec:confirm} reduces the copy-paste gain to $+0.011$ AP with a confidence interval that includes zero.
 Figure~\ref{fig:cvagnostic} shows the fold structure directly.
 
 \begin{figure}[H]
@@ -213,7 +209,7 @@ for copy-paste. The last is the largest positive augmentation effect measured
 anywhere in the project. It is still not evidence of an effect. Each value comes
 from a single run, and the seed-to-seed standard deviation on the Mask R-CNN
 multiclass grid ranges from $0.002$ to $0.018$, with individual arms spanning up
-to $0.031$ across their three seeds. All three SAM 3 deltas lie inside that
+to $0.041$ across their three seeds. All three SAM 3 deltas lie inside that
 band, so one plausible explanation is the draw of a single seed. Calling them
 improvements would require the three-seed repetition that queue time did not
 allow.
@@ -221,21 +217,18 @@ allow.
 On the class-agnostic track the direction reverses. Every augmentation lowered
 SAM 3's AP, from $0.713$ at baseline to $0.704$, $0.693$ and $0.685$. The sign
 of the copy-paste effect is therefore opposite in the two backbones, at $+0.036$
-for Mask R-CNN and $-0.020$ for SAM 3, which is itself an argument against
-reading any of these single-run deltas as a property of the augmentation.
+for Mask R-CNN and $-0.020$ for SAM 3, which is itself an argument against reading any of these single-run deltas as a property of the augmentation. The augmented SAM 3 runs also received about twice the optimiser steps of their baseline and were scored at their last checkpoint, so these deltas are confounded as well as unreplicated.
 
 The one comparison in Table~\ref{tab:sam3} that is not fragile is the vertical
 one. Without augmentation, SAM 3 exceeds the best Mask R-CNN arm by $0.089$
 class-agnostic AP ($0.713$ against $0.624$) and by $0.011$ multiclass AP
 ($0.115$ against $0.104$). The class-agnostic gap is roughly two and a half
-times the largest augmentation delta in the entire grid, and an order of
-magnitude above the typical one. Whatever benefit augmentation might carry at
+times the largest positive augmentation delta in the grid and about four times the typical one. Whatever benefit augmentation might carry at
 this data scale, backbone choice dominates it.
 
 \subsection*{Experiment 4: the two-stage DINOv2 pipeline}
 
-Stage 2 was trained on 887 real training crops, optionally extended with the 171
-synthetic rare crops from the augmentation pipeline. It was then evaluated on
+Stage 2 was trained on 887 real training crops, optionally extended with 171 rare-class crops from the Strategy A crop dataset, 74 of them synthetic. It was then evaluated on
 368 real ground-truth test crops and end-to-end over 483 class-agnostic SAM 3
 test proposals. Table~\ref{tab:dino} gives both evaluations.
 
@@ -257,8 +250,8 @@ Head training set & Head & top-1 & head-macro rec. & rare-macro rec. & mask AP &
 \midrule
 real (887 crops)          & linear & $\mathbf{0.454}$ & $\mathbf{0.381}$ & $0.000$ & $\mathbf{0.0910}$ & $0.0000$ \\
 real (887 crops)          & kNN    & $0.386$ & $0.332$ & $0.000$ & $0.0797$ & $0.0000$ \\
-real $+$ 171 synth.\ rare & linear & $0.440$ & $0.354$ & $0.000$ & $0.0892$ & $0.0000$ \\
-real $+$ 171 synth.\ rare & kNN    & $0.340$ & $0.286$ & $0.000$ & $0.0748$ & $0.0042$ \\
+real $+$ 171 rare (74 synth.) & linear & $0.440$ & $0.354$ & $0.000$ & $0.0892$ & $0.0000$ \\
+real $+$ 171 rare (74 synth.) & kNN    & $0.340$ & $0.286$ & $0.000$ & $0.0748$ & $0.0042$ \\
 \midrule
 \multicolumn{5}{@{}l}{\emph{reference, end-to-end fine-tuned, same test split:} SAM 3 multiclass} & $0.115$ & \\
 \multicolumn{5}{@{}l}{\emph{reference:} best Mask R-CNN arm (e7, $n{=}3$)} & $0.104$ & \\
@@ -276,8 +269,7 @@ the per-class breakdown. Recall is $0.96$ for Treppe, $0.82$ for WC and $0.69$
 for Aufzug, then collapses to $0.15$ for Lager, $0.08$ for Technikraum, and
 exactly zero for K\"uche, Flur, Besprechungsraum and all six rare classes. Since
 localisation is not involved, this places the failure squarely in room-type
-classification, and it shows that the failure is not confined to the tail. Four
-head classes with 3--16 test instances also score zero.
+classification, and it shows that the failure is not confined to the tail. Three head classes with 3--16 test instances also score zero.
 
 \begin{figure}[H]
 \centering
@@ -286,7 +278,7 @@ head classes with 3--16 test instances also score zero.
 \label{fig:dinorecall}
 \end{figure}
 
-Adding the 171 synthetic rare crops did not help. Top-1 accuracy fell from
+Adding the 171 rare-class crops, 74 of them synthetic, did not help. Top-1 accuracy fell from
 $0.454$ to $0.440$ for the linear head and from $0.386$ to $0.340$ for the kNN
 head, head-macro recall fell in both, and rare-macro recall stayed at $0.000$.
 The synthetic crops came from the same pipeline whose output the detectors also
@@ -298,8 +290,7 @@ overall accuracy of the four, and its rare-macro recall is still zero.
 
 Evaluation B places the pipeline on the same axis as the fine-tuned detectors.
 Its best configuration reaches $0.0910$ two-stage mask AP, below fine-tuned SAM
-3 at $0.115$ and below the best Mask R-CNN arm at $0.104$, and above only the
-unaugmented Mask R-CNN baseline at $0.081$. Figure~\ref{fig:dinotwostage} shows
+3 at $0.115$ and below the best Mask R-CNN arm at $0.104$, and above the unaugmented Mask R-CNN baseline at $0.081$ and several augmented arms. Figure~\ref{fig:dinotwostage} shows
 this against the three reference lines. Splitting the problem in two therefore
 did not recover the accuracy that end-to-end fine-tuning achieves, even though
 stage 1 is the strongest localiser available. SAM 3 finds room boundaries at
@@ -353,9 +344,7 @@ room segmentation. On Mask R-CNN the effect is neutral to harmful, and it
 replicated as such across three seeds and five cross-validation folds. Nine of
 thirteen augmented arms fall below baseline on the class-agnostic grid, the two
 diffusion-based arms are the two lowest multiclass arms in the
-cross-validation, and the LoRA arm is the worst arm in the grid at $-0.057$. On
-SAM 3 there is a small multiclass gain that is unreplicated, single-seed, and
-inside the noise band measured on the grid, accompanied by a class-agnostic loss
+cross-validation, and the LoRA arm is the second-worst arm in the grid at $-0.057$. On SAM 3 there is a small multiclass gain that is unreplicated, single-seed, confounded by step count and inside the noise band measured on the grid, accompanied by a class-agnostic loss
 under every augmentation. As classifier-crop augmentation the synthetic data
 lowered every metric it touched.
 
@@ -365,8 +354,11 @@ top-ranked arm in three of the six backbone and track comparisons run here: the
 class-agnostic grid, the class-agnostic cross-validation, and SAM 3 multiclass.
 It is not top-ranked in the multiclass grid, where e7 leads, in the multiclass
 cross-validation, where e1 leads, or on the SAM 3 class-agnostic track, where
-the baseline leads. Its strongest single result is the cross-validated $+0.045$
-class-agnostic AP, positive in all five folds at $p = 0.0625$.
+the baseline leads. Its strongest single result is the cross-validated $+0.045$ class-agnostic AP,
+positive in all five folds at $p = 0.0625$. That result rests on the
+contaminated cross-validation, and Section~\ref{sec:confirm} shows that it does
+not survive a pre-registered, selection-free replication at the conventional
+threshold.
 
 The backbone dominates the augmentation. Without any augmentation, SAM 3 exceeds
 the best Mask R-CNN arm by $0.089$ class-agnostic AP and $0.011$ multiclass AP,

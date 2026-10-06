@@ -31,7 +31,7 @@ project asked one narrow question. Does diffusion or LoRA inpainting of rare
 rooms improve room-instance segmentation on this dataset, and does the answer
 depend on the backbone?
 
-The work has four parts, all carried out by the author. The first is an
+The work has five parts, all carried out by the author. The first is an
 augmentation stack that generates rare-room examples from training-split pixels
 only and admits them through automated structural and pixel checks. It produces
 fourteen controlled arms covering prompt-based inpainting, an exemplar-guided
@@ -44,18 +44,27 @@ under a five-fold cross-validation that pools 21 held-out images instead of 11.
 The third part carries the three most promising augmentation datasets over to a
 fine-tuned SAM 3 \cite{carion2025sam3}. The fourth separates localisation from
 naming: SAM 3 class-agnostic proposals are cropped and classified by a frozen
-DINOv2-base encoder \cite{oquab2024dinov2}, with and without the synthetic rare
-crops.
+DINOv2-base encoder \cite{oquab2024dinov2}, with and without the synthetic rare crops.
+The fifth audits the evaluation itself. It found that the cross-validation
+reused the images that had selected each checkpoint, that augmented arms saw
+real plans less often than the baseline, and that the diffusion arm generated
+almost no pixels, and it re-tested the surviving signals in pre-registered
+studies with fresh seeds.
 
 The result is negative and consistent. Across three seeds and five folds, no
 diffusion or LoRA arm beat the unaugmented baseline by a margin the data
 supports. Every paired sign test on the three-seed grid returned $p \ge 0.25$,
 and nine of thirteen augmented arms scored below baseline on the class-agnostic
-track. The only augmentation with a repeatable positive sign was plain exemplar
-copy-paste, the control condition that contains no generated pixels at all. Even
-its best case, $+0.045$ class-agnostic AP with all five folds positive, reaches
-only $p = 0.0625$, the smallest value attainable at $K = 5$. Rare-class AP
-stayed at or near zero everywhere.
+track. The only augmentation with a repeatable positive sign in the first evaluation
+was plain exemplar copy-paste, the control condition that contains no
+generated pixels at all. Its best case there, $+0.045$ class-agnostic AP with
+all five folds positive, came from a cross-validation that reused the
+checkpoint-selection images. Under a pre-registered, selection-free
+replication with 12 fresh seeds per arm, copy-paste gained $+0.011$ AP (95\,\%
+CI $-0.007$ to $+0.029$), and exemplar inpainting with a diffusion band wide
+enough to matter changed AP by $-0.004$, with an upper bound of $+0.009$ that
+excludes any practically relevant gain. On the 19-class problem, Strategy A, the prompt-based rare-room inpainting arm, led the baseline by $+0.006$ AP with a one-sided seed-level $p = 0.034$, the closest the project came to a positive result, but its interval over seeds and held-out images ($-0.004$ to $+0.019$) still includes zero. Rare-class AP stayed
+at or near zero everywhere.
 
 What did move the numbers was the backbone. SAM 3 scored $0.713$ class-agnostic
 mask AP against $0.624$ for the best Mask R-CNN arm, a gap larger than every

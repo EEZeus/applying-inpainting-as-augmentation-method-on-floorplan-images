@@ -47,7 +47,7 @@ measurement could have detected an effect at all.
 \subsection{Technologies used}
 
 Table~\ref{tab:tech} lists the main components. The detector is torchvision's
-\protect\path{maskrcnn_resnet50_fpn_v2} with ImageNet initialisation, chosen because it
+\protect\path{maskrcnn_resnet50_fpn_v2}, initialised from torchvision's COCO-trained detector weights and chosen because it
 is an ordinary pretrained baseline that fits a 35-image training set on one GPU.
 Any difference between arms should come from the data, so the model itself
 should be unremarkable. Stable Diffusion 1.5 inpainting generates the synthetic
@@ -68,7 +68,7 @@ therefore follows the standard COCO definition \cite{lin2014coco}.
 Component & Version / identifier & Role \\
 \midrule
 PyTorch, torchvision & 2.1.2 & Mask R-CNN training and evaluation \\
-Mask R-CNN & \protect\path{maskrcnn_resnet50_fpn_v2} & ImageNet-initialised baseline detector \\
+Mask R-CNN & \protect\path{maskrcnn_resnet50_fpn_v2} & COCO-pretrained baseline detector \\
 SD 1.5 inpainting & rev.\ \texttt{8a4288a7} & Strategy A/B/C generators \\
 \texttt{diffusers}, \texttt{peft} & pinned in \texttt{requirements.txt} & diffusion pipeline, rank-8 LoRA \\
 SAM 3 & \protect\path{facebookresearch/sam3} & foundation-model detector, PyTorch 2.10 \\
@@ -92,7 +92,10 @@ rejects any augmented image that cannot be traced to a training image; the
 bounded rare-aware sampler; the class-agnostic dataset view; the SAM 3
 configuration and the two bug fixes described in Section~\ref{sec:problems}; the
 rotated held-out cross-validation; the DINOv2 feature extraction and two-stage
-evaluation; and the analysis scripts that produce every table and figure here.
+evaluation; the confirmatory study of Section~\ref{sec:confirm}, with its
+exposure-parity sampler, wide-seam generator, matched datasets, gates,
+pre-registration and dependency-free statistics; and the analysis scripts that
+produce every table and figure here.
 The interpretation, the statistical protocol and the decision to report a null
 result are likewise the author's.
 
@@ -159,7 +162,7 @@ ID & Category & Train & Val & Test & Total \\
 Figure~\ref{fig:classdist} shows the same distribution graphically and
 Figure~\ref{fig:raresupport} isolates the tail. The consequence that governs the
 whole report sits in the Test column. The six primary-rare categories are scored
-on 17 instances in total, and three of them on two instances or fewer. A COCO AP
+on 17 instances in total, and four of them on two instances or fewer. A COCO AP
 computed over one or two instances is a step function, so it cannot express a
 small improvement.
 
@@ -205,8 +208,11 @@ every candidate.
 \emph{Strategy B} converts a \emph{common} room into a rare one. Common classes
 are screened against the real geometry ranges of the target rare class, each
 source annotation is used at most once, and the per-class cap holds the
-synthetic count to three times the real count. Only the selected annotation's
-category label changes. Its polygon and every other annotation stay as they are.
+synthetic count to three times the real count. Only the selected annotation's category label changes. Its polygon and every
+other annotation stay as they are. Because the safe mask protects every dark
+stroke inside the room, the source room's printed name (for example
+``B\"uro'') stays visible inside a room now annotated as rare, and the retention
+check meant to catch this defaults to a threshold of 1.0, so it never fires.
 
 \emph{Strategy C} is exemplar-guided. Rather than asking the model to invent a
 rare room, it transplants a real rare training room into a geometry-compatible
@@ -217,8 +223,14 @@ not cover, at low strength, so the donor pixels themselves lie outside the
 diffusion mask. Three modes were generated from the same pairing plan so that
 the diffusion contribution is isolated: C0 direct copy-paste, which adds no
 generated pixels (arm e8); C1 deterministic feather blending (arm e9); and C2
-exemplar-seeded diffusion inpainting (arms e10 and e11).
-Figure~\ref{fig:qastrategyc} shows a C0 audit row.
+exemplar-seeded diffusion inpainting (arms e10 and e11). Figure~\ref{fig:qastrategyc} shows a C0 audit row.
+Two implementation details matter for interpreting these arms. The C2
+diffusion band is a 6-pixel inner seam at strength 0.30; after the crop is
+resized to $512^2$ it covers about one Stable Diffusion latent cell, so e10 and
+e11 contain very few generated pixels. And e8 was trained on a multi-room
+composition of the C0 edits (5 $\pm$ 2\,\% of the common rooms of a plan
+converted at once), whereas e9--e11 use single-edit datasets. Both are repaired
+in Section~\ref{sec:confirm}.
 
 \emph{The LoRA branch} trains one shared rank-8 adapter on the attention
 projections of the inpainting U-Net, freezing the VAE, the text encoder and the
@@ -313,15 +325,18 @@ use the original held-out images and annotations.
 \subsubsection{Goal 1: the controlled experiment matrix}
 
 Fourteen arms were defined, listed in Table~\ref{tab:arms}. Each declares both
-tracks and trains from independent ImageNet initialisation on the same recipe:
+tracks and trains from a fresh copy of the COCO-pretrained weights on the same recipe:
 25 epochs of exactly 35 optimizer steps, SGD at learning rate 0.005 with
 momentum 0.9 and weight decay $5\times10^{-4}$, the rate dropping tenfold every
 8 epochs, batch size 1, aspect-preserving resize between 1024 and 1600 pixels,
 mixed precision, horizontal flip and mild photometric jitter. Fixing the step
 budget is what keeps the arms comparable. An
 augmented arm sees a different mixture of images from e0 while receiving the
-same number of gradient updates. The best checkpoint is selected on validation
-mask AP.
+same number of gradient updates. The rule has a cost that the original
+analysis did not account for: synthetic plans \emph{replace} real plans within
+the 35 draws, so an augmented arm sees each real plan 8--14 times over training
+instead of 25, and the rare-weighted arms additionally sample with replacement.
+The best checkpoint is selected on validation mask AP.
 
 The rare-aware sampler used by the ``$+$w'' arms assigns each training image the
 bounded weight
@@ -391,10 +406,13 @@ only the evaluation set rotates. The 21 held-out images are partitioned
 round-robin into $K=5$ folds, and each frozen checkpoint is re-evaluated on each
 fold. Across the folds every held-out image is tested exactly once, and the
 pooled rare test support rises from 17 to 40 instances. Six arms spanning the
-families were selected, giving 60 evaluations. The project-aware constraint
-survives this. The 21 held-out images span only three projects, so a
-project-aware partition with $K>3$ is impossible, but no fold trains anything,
-so the leakage that would matter is prevented by construction. Per-fold paired
+families were selected, giving 60 evaluations. The 21 held-out images span only three projects, so a project-aware partition
+with $K>3$ is impossible. Two limitations were overlooked when this evaluation
+was designed: the 21 images include the 10 validation images on which every
+evaluated \code{best.pth} had been selected, and only the seed-42 checkpoint of
+each arm was scored. The folds are therefore not independent of model
+selection, and Section~\ref{sec:confirm} replaces this evaluation with a
+selection-free re-score of all three seeds. Per-fold paired
 tests use the same protocol, where the minimum attainable $p$-value at $K=5$ is
 $0.0625$.
 
@@ -406,9 +424,12 @@ multiclass track and a single \texttt{room} concept for the class-agnostic
 track. The configuration is 20 epochs at resolution 1008 with AdamW, gradient
 clipping, layer-wise learning-rate decay on the vision trunk, and separate
 learning rates for the heads, the vision backbone and the language backbone. The
-presence head is enabled at evaluation. Predictions are scored through the same
-\texttt{pycocotools} path as the Mask R-CNN runs, so the two backbones can be
-compared directly.
+presence head is enabled at evaluation. Predictions are scored through the same \texttt{pycocotools} path as the Mask
+R-CNN runs. The augmented SAM 3 runs are not matched to their own baseline,
+however: the trainer runs 20 epochs over the whole augmented pool, so they
+receive roughly twice the optimiser steps, and the last checkpoint is scored
+with a 0.3 mask-score threshold. The backbone gap is far larger than these
+effects, but the within-SAM 3 augmentation deltas are confounded.
 
 Three augmentation datasets were carried across without regeneration: the e10
 diffusion inpaint data, the e12 LoRA data and the e8 copy-paste data. Each was
@@ -435,8 +456,7 @@ classifier and a cosine $k$-NN. No gradient reaches the backbone in either case.
 \end{figure}
 
 Two arms differ only in what the head was trained on. One uses the 887 real
-training crops. The other adds the 171 rare crops produced by the augmentation
-pipeline. Two evaluations are reported. Evaluation A classifies the 368 real
+training crops. The other adds 171 rare-class crops from the Strategy A crop dataset, of which 74 are synthetic and 97 are re-crops of the 30 real rare rooms. Two evaluations are reported. Evaluation A classifies the 368 real
 ground-truth test crops, which removes detector error entirely and measures the
 classification bottleneck on its own; it reports top-1 accuracy together with
 macro recall over the head classes and over the rare classes. Evaluation B
@@ -473,8 +493,7 @@ correctness as unverified wherever the automatic checks cannot establish that a
 generated region depicts the requested class, and the Strategy B review file is
 explicitly an automatic decision audit rather than a human review gate. Related
 to this, the LoRA branch documentation records that the prompt-only conversion
-retained visible common-room text labels such as ``B\"uro'' in some accepted
-samples. The e12 and e13 results are reported here as measurements of the data
+retained visible common-room text labels such as ``B\"uro'' in some accepted samples, and the prompt-based Strategy B shares the same defect. The e12 and e13 results are reported here as measurements of the data
 as it was actually used, with that caveat attached.
 The project's central claim is negative, and it is reported as such, with $n$,
 standard deviation and $p$-value, instead of being narrowed to whichever arms
@@ -483,7 +502,7 @@ and metrics happen to look favourable.
 \subsection{Reproducibility and code availability}
 
 All code, configuration, tests and documentation are in a single Git repository
-at commit \texttt{d1b08f0}. Datasets, model weights and outputs are
+at commit \texttt{0daf760}. Datasets, model weights and outputs are
 machine-local and deliberately untracked. The cluster checkout lives in one
 directory, \protect\path{/netscratch/espandar/inpainting/floorplan-inpainting/}, with
 code in \texttt{src/}, \texttt{scripts/}, \texttt{slurm/} and
@@ -497,7 +516,7 @@ Two conda environments are needed because the two backbones have incompatible
 requirements: PyTorch 2.1.2 for data preparation, the diffusion generators, Mask
 R-CNN and the DINOv2 stage, and PyTorch 2.10 for SAM 3. Experiments run on the
 DFKI Pegasus Slurm cluster on A100 and H100 nodes, with SAM 3 jobs pinned to the
-80\,GB GPU tier. Four submit scripts reproduce the whole set of results. Each is
+80\,GB GPU tier. Six submit scripts reproduce the whole set of results. Each is
 a dependency chain that builds its inputs, smoke-tests one task, runs the full
 array and then analyses the output.
 
@@ -515,6 +534,8 @@ Script & Work & Output \\
 \protect\path{scripts/submit_cv.sh}       & 5-fold rotated held-out re-evaluation & \protect\path{outputs/final/cv/} \\
 \protect\path{scripts/submit_sam3_aug.sh} & SAM 3 baseline $+$ 3 augmentations, 2 tracks & \protect\path{outputs/final/sam3/} \\
 \protect\path{scripts/submit_dino.sh}     & DINOv2 extraction, heads and two-stage eval & \protect\path{outputs/final/dino/} \\
+\protect\path{scripts/submit_confirm.sh} & re-score, wide-seam generation, 48-run confirmation & \protect\path{outputs/final/confirm/} \\
+\protect\path{scripts/submit_confirm_mc.sh} & 36-run multiclass follow-up & \protect\path{outputs/final/confirm_mc/} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -544,7 +565,7 @@ a third party is therefore currently by request rather than by URL.
 
 \emph{The test split is too small to measure the thing the project is about.}
 This is the fundamental problem, and it was not solved. Six rare categories are
-scored on 17 test instances, three of them on two instances or fewer. A COCO AP
+scored on 17 test instances, four of them on two instances or fewer. A COCO AP
 over two instances takes only a handful of discrete values, so a genuine small
 improvement in rare-class segmentation is not representable, let alone
 distinguishable from noise. Two mitigations were built. Three seeds measure the
@@ -602,3 +623,17 @@ structural lines and seeds generation with a real rare exemplar. The e12 and e13
 arms and the SAM 3 LoRA run reported here use the original prompt-only data, so
 they are best read as evidence about that generator rather than about
 class-conditioned LoRA inpainting in general.
+
+\emph{Confounds found in the evaluation itself.} An audit of the finished
+grid found four defects that bias or blur the comparison: the
+cross-validation reused the validation plans that had selected each
+checkpoint; the fixed step budget made synthetic plans replace real ones; the
+copy-paste and diffusion arms were built from differently composed datasets;
+and the diffusion band covered about one latent cell. None of them is a coding
+error in the usual sense, and every arm shared them, but together they meant
+that neither a positive nor a negative grid result could be attributed to the
+generated pixels. They were repaired in a pre-registered confirmatory study
+(Section~\ref{sec:confirm}) rather than by re-interpreting the existing
+numbers. A prediction-dump defect found during its smoke test
+(\texttt{pycocotools} adds NumPy-typed fields to result records in place) was
+fixed before the full run.

@@ -78,25 +78,24 @@ detection backbone. Fourteen augmentation arms were built from the training
 split alone, covering prompt-based Stable Diffusion 1.5 inpainting, an
 exemplar-guided variant with copy-paste and feather-blend controls, and a rank-8
 LoRA adapter. Each arm was evaluated with a torchvision Mask R-CNN over three
-seeds and with a five-fold rotated held-out cross-validation, then compared
-against a fine-tuned SAM 3 and against a two-stage pipeline that labels
-class-agnostic proposals with a frozen DINOv2 classifier. No diffusion or LoRA
-arm produced a statistically defensible gain. On the three-seed grid the largest
-class-agnostic change was $+0.036$ mask AP for plain copy-paste and $-0.057$ for
-LoRA, with every paired sign test at $p \ge 0.25$, and nine of thirteen
-augmented arms scored below the unaugmented baseline. Cross-validation over 21
-held-out images reproduced the pattern, with copy-paste at $+0.045$ AP, positive
-in all five folds at $p = 0.0625$, the minimum attainable at $K=5$. SAM 3 showed
-a small multiclass gain from copy-paste, at $+0.032$, yet lost class-agnostic AP
-under every augmentation, on a single seed and inside the seed-noise band
-measured on the grid. Rare-class AP stayed at or near zero for every method, and
-the frozen DINOv2 classifier recalled zero rare instances even on perfect
-ground-truth crops. The dominant effect was the backbone. SAM 3 exceeded the
-best Mask R-CNN arm by $0.089$ class-agnostic AP, an order of magnitude more
-than any augmentation delta. Class-agnostic room localisation is already solved
-to $0.59$--$0.71$ AP. The unsolved problem is room-type classification at this
-data scale, and neither inpainting augmentation nor a dedicated frozen
-classifier addressed it.
+seeds and a rotated held-out cross-validation, and compared against a fine-tuned
+SAM 3 and a two-stage pipeline that labels class-agnostic proposals with a
+frozen DINOv2 classifier. An audit of that evaluation found that the
+cross-validation reused the checkpoint-selection images, that augmented arms saw
+real plans less often than the baseline, and that the diffusion arm generated
+almost no pixels. A pre-registered confirmatory study repaired these defects and
+re-tested the surviving signals with 12 fresh seeds per arm. Exemplar inpainting
+with a diffusion band of three latent cells changed class-agnostic mask AP by
+$-0.004$ (95\,\% CI $-0.019$ to $+0.009$), which excludes a practically relevant
+gain, and plain copy-paste, the strongest arm of the original grid at $+0.036$,
+gained only $+0.011$ (CI $-0.007$ to $+0.029$). A multiclass follow-up found Strategy A, prompt-based inpainting of rare rooms, ahead of the baseline by $+0.006$ AP (one-sided seed-level $p = 0.034$), but its seed-and-image interval ($-0.004$ to $+0.019$) includes zero, so the gain is not established. Rare-class
+AP stayed at or near zero for every method, and the frozen DINOv2 classifier
+recalled zero rare instances even on perfect ground-truth crops. The dominant
+effect was the backbone: SAM 3 exceeded the best Mask R-CNN arm by $0.089$
+class-agnostic AP, about four times the typical augmentation effect.
+Class-agnostic room localisation is already solved to $0.59$--$0.71$ AP. The
+unsolved problem is room-type classification at this data scale, and inpainting
+augmentation does not address it.
 \end{abstract}
 
 \keywords{instance segmentation; data augmentation; diffusion inpainting; LoRA;
@@ -124,6 +123,8 @@ negative result}
 \input{Sections/Section 4 - Implementation Details.tex}
 
 \input{Sections/Section 5 - Results.tex}
+
+\input{Sections/Section 5b - Confirmatory Study.tex}
 
 \input{Sections/Section 6 - Conclusions and Future Scope.tex}
 
