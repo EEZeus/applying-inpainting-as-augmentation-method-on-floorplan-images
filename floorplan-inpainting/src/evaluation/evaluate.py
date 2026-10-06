@@ -56,9 +56,15 @@ def evaluate_checkpoint(dataset_cfg, model_cfg, rare_cfg, checkpoint, split="tes
     if dump_predictions:
         # Raw (unthresholded) COCO results, so subset / bootstrap AP can be
         # recomputed offline without re-running the model.
+        # COCO.loadRes adds numpy-typed fields (area, id, ...) to these dicts in
+        # place; keep only the original prediction fields, as plain Python types.
+        def clean(records, geometry):
+            return [{"image_id": int(r["image_id"]), "category_id": int(r["category_id"]),
+                     "score": float(r["score"]), geometry: r[geometry] if geometry == "segmentation"
+                     else [float(v) for v in r[geometry]]} for r in records]
         payload = {"image_ids": [int(i) for i in ids], "split": split,
                    "annotation_file": str(annotation_file), "checkpoint": str(checkpoint),
-                   "bbox": bbox_results, "segm": masks}
+                   "bbox": clean(bbox_results, "bbox"), "segm": clean(masks, "segmentation")}
         with gzip.open(output_dir / "coco_results.json.gz", "wt", encoding="utf-8") as handle:
             json.dump(payload, handle)
     predictions = compact_predictions(bbox_results, masks, model_cfg["score_threshold"], ids)
