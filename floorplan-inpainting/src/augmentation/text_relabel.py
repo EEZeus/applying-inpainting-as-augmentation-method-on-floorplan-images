@@ -16,6 +16,7 @@ Room numbers (digit-only tokens) are left untouched. A separate OCR pass
 (scripts/text_relabel_finish.py) admits a room only if OCR reads the new name
 and no longer reads the old one.
 """
+import re
 from collections import Counter
 
 import cv2
@@ -34,11 +35,42 @@ def find_font(path=None):
     return font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans"), fallback_to_default=True)
 
 
-def rare_vocabulary(coco, train_ids, ocr_tokens_by_image, target_ids, file_names):
-    """Words printed inside real training rooms of each target class.
+_RENDERABLE = re.compile(r"^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\- ]*$")
+
+
+def room_label_words(tokens, min_conf=0.6, min_letters=3):
+    """Clean room names from the OCR tokens inside one room.
+
+    Labels wrap over lines ("Abstell-" / "raum"): a token ending in a hyphen is
+    joined with the next label token below it. A word is kept only if every
+    part was read with confidence >= min_conf, it starts with a capital letter
+    (German room names are nouns), has >= min_letters letters and contains no
+    OCR debris characters.
+    """
+    labels = sorted((t for t in tokens if is_label_text(t["text"])),
+                    key=lambda t: ((t["box"][1] + t["box"][3]) / 2, t["box"][0]))
+    words, skip = [], set()
+    for i, token in enumerate(labels):
+        if i in skip:
+            continue
+        text, conf = strip_digits(token["text"]), float(token["conf"])
+        if str(token["text"]).rstrip().endswith("-") and i + 1 < len(labels):
+            following = labels[i + 1]
+            text = text + strip_digits(following["text"]).lower()
+            conf = min(conf, float(following["conf"]))
+            skip.add(i + 1)
+        text = " ".join(text.split()).strip(" .-")
+        if (conf >= min_conf and sum(ch.isalpha() for ch in text) >= min_letters
+                and _RENDERABLE.match(text)):
+            words.append(text)
+    return words
+
+
+def rare_vocabulary(coco, train_ids, ocr_tokens_by_image, target_ids, file_names, min_conf=0.6):
+    """Room names printed inside real training rooms of each target class.
 
     Returns {category_id: Counter(word)}; falls back to the category name for
-    a class whose training rooms carry no readable label.
+    a class whose training rooms carry no clean readable label.
     """
     names = {int(c["id"]): c["name"] for c in coco["categories"]}
     vocab = {int(c): Counter() for c in target_ids}
@@ -52,12 +84,8 @@ def rare_vocabulary(coco, train_ids, ocr_tokens_by_image, target_ids, file_names
             continue
         mask = rasterize_annotation(annotation, *sizes[image_id])
         inside = tokens_in_mask([t["box"] for t in tokens], mask)
-        for index in inside:
-            text = tokens[index]["text"]
-            if is_label_text(text):
-                word = strip_digits(text)
-                if word:
-                    vocab[category][word] += 1
+        for word in room_label_words([tokens[i] for i in inside], min_conf):
+            vocab[category][word] += 1
     for category, counter in vocab.items():
         if not counter:
             counter[names[category]] += 1

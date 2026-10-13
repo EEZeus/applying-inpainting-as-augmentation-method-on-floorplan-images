@@ -6,7 +6,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from src.augmentation.text_relabel import (apply_patch, convert_room, find_font, make_patch, render_word,
-                                           verify_reading)
+                                           room_label_words, verify_reading)
 from src.data.transforms import DetectionTransform
 from src.experiments.train import _validate_experiment
 from src.models.mask_rcnn import build_mask_rcnn
@@ -188,3 +188,11 @@ def test_text_head_is_required_exactly_for_text_arms():
     e0["text_head"] = {"hidden": 8}
     with pytest.raises(ValueError):
         _validate_experiment(e0)
+
+
+def test_room_label_words_merges_hyphenation_and_drops_ocr_debris():
+    tok = lambda text, y, conf=0.9, x=10: {"text": text, "conf": conf, "box": [x, y, x + 50, y + 12]}
+    assert room_label_words([tok("Abstell-", 0), tok("raum", 14), tok("45-03-012", 28)]) == ["Abstellraum"]
+    assert room_label_words([tok("arde", 0), tok("robe", 14), tok("RS", 28), tok("[Abstell", 42)]) == []
+    assert room_label_words([tok("Foyer", 0), tok("Empfang", 14, conf=0.3)]) == ["Foyer"]
+    assert room_label_words([tok("Abst.", 0)]) == ["Abst"]
