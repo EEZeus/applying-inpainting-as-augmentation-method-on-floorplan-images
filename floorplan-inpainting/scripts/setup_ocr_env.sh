@@ -22,7 +22,7 @@ import easyocr
 easyocr.Reader(["de", "en"], gpu=False, model_storage_directory=os.environ["EASYOCR_MODEL_DIR"],
                download_enabled=True, verbose=False)
 from huggingface_hub import snapshot_download
-print(snapshot_download("intfloat/multilingual-e5-small", cache_dir=os.environ["HF_HUB_CACHE"]))
+print(snapshot_download("intfloat/multilingual-e5-small", cache_dir=os.environ["HF_HUB_CACHE"], token=False))
 import torch, transformers
 print("ocr env ready:", torch.__version__, torch.version.cuda, easyocr.__version__, transformers.__version__)
 PY
