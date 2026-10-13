@@ -18,6 +18,11 @@ class DetectionTransform:
             boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
             target["boxes"] = boxes
             target["masks"] = target["masks"].flip(-1)
+            if "_ocr_boxes" in target:
+                # OCR token boxes are normalised to [0, 1].
+                ocr = target["_ocr_boxes"].clone()
+                ocr[:, [0, 2]] = 1.0 - target["_ocr_boxes"][:, [2, 0]]
+                target["_ocr_boxes"] = ocr
         if self.train and self.brightness:
             image = F.adjust_brightness(image, 1 + random.uniform(-self.brightness, self.brightness))
         if self.train and self.contrast:

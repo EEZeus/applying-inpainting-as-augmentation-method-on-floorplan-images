@@ -5,6 +5,7 @@ import torch
 from tqdm import tqdm
 
 from src.evaluation.coco_eval import output_to_coco
+from src.models.text_head import is_text_aware, set_text_tokens
 
 
 def move_targets(targets, device):
@@ -31,6 +32,8 @@ def train_one_epoch(model, loader, optimizer, device, scaler, epoch):
             rare_crops_seen += kind == "rare_crop"
             for occurrence in target.get("_exposure", []):
                 exposure[(int(occurrence["category_id"]), occurrence["source"])] += 1
+        if is_text_aware(model):
+            set_text_tokens(model, targets, device)
         targets = [
             {key: value for key, value in target.items() if not key.startswith("_")}
             for target in targets
@@ -59,6 +62,8 @@ def predict_coco(model, loader, device):
     model.eval()
     bbox_results, mask_results = [], []
     for images, targets in tqdm(loader, desc="inference"):
+        if is_text_aware(model):
+            set_text_tokens(model, targets, device)
         outputs = model([image.to(device) for image in images])
         for target, output in zip(targets, outputs):
             boxes, masks = output_to_coco(int(target["image_id"]), output)

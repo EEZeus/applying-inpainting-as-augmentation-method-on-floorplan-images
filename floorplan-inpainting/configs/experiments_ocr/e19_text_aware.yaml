@@ -1,0 +1,20 @@
+id: e19
+method: Text-aware Mask R-CNN (OCR token features fused into the RoI classifier)
+base_model_config: configs/baseline.yaml
+tracks: [multiclass]
+dataset:
+  sources: [original]
+sampling:
+  mode: uniform
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+text_head:
+  hidden: 256
+  token_dropout: 0.15
+  image_dropout: 0.15
+ocr:
+  caches: [data/ocr/original_tokens.json]
+  features: [data/ocr/original_features.npz]
+output_root: outputs/ocr_study

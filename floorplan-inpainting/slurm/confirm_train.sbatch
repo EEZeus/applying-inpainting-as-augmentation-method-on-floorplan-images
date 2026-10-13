@@ -30,6 +30,9 @@ declare -A CFGMAP=(
   [e8]=configs/experiments_c/e8_strategy_c_copy_paste.yaml
   [e16]=configs/experiments_confirm/e16_c_copy_paste_matched.yaml
   [e17]=configs/experiments_confirm/e17_c_inpaint_wide_matched.yaml
+  [e18]=configs/experiments_ocr/e18_text_relabel.yaml
+  [e19]=configs/experiments_ocr/e19_text_aware.yaml
+  [e20]=configs/experiments_ocr/e20_text_aware_relabel.yaml
 )
 TID=${SLURM_ARRAY_TASK_ID}
 ARM_IDX=$(( TID / N_SEEDS ))

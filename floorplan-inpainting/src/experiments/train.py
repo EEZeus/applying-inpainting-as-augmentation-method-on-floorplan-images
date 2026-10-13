@@ -15,6 +15,7 @@ from src.evaluation.coco_eval import evaluate_coco_results
 from src.experiments.data import (build_epoch_sampler, build_training_dataset,
                                   original_train_counts)
 from src.models.mask_rcnn import build_mask_rcnn
+from src.ocr.features import provider_from_config
 from src.training.engine import predict_coco, train_one_epoch
 from src.utils.config import load_yaml, resolve_path, split_dir
 from src.utils.reproducibility import seed_everything
@@ -48,7 +49,13 @@ def _validate_experiment(experiment_cfg):
         # exemplar inpainting under the exposure-parity sampler.
         "e16": (["strategy_c_copy_paste_matched"], "paired_variant", False),
         "e17": (["strategy_c_wide_matched"], "paired_variant", False),
+        # OCR study: plain model + label-rewrite inpainting (e18), text-aware
+        # model on original plans (e19) and with label-rewrite inpainting (e20).
+        "e18": (["text_relabel"], "paired_variant", False),
+        "e19": (["original"], "uniform", False),
+        "e20": (["text_relabel"], "paired_variant", False),
     }
+    text_aware_ids = {"e19", "e20"}
     experiment_id = experiment_cfg["id"]
     if experiment_id not in expected:
         raise ValueError(f"Unknown required experiment ID: {experiment_id}")
@@ -59,6 +66,20 @@ def _validate_experiment(experiment_cfg):
         raise ValueError("Crop configuration mismatch")
     if int(experiment_cfg["budget"]["steps_per_epoch"]) <= 0:
         raise ValueError("steps_per_epoch must be positive")
+    if bool(experiment_cfg.get("text_head")) != (experiment_id in text_aware_ids):
+        raise ValueError(f"{experiment_id}: text_head must be set exactly for {sorted(text_aware_ids)}")
+    if experiment_cfg.get("text_head") and "ocr" not in experiment_cfg:
+        raise ValueError(f"{experiment_id}: a text-aware arm needs an ocr block")
+
+
+def text_setup(experiment_cfg):
+    """(OCR provider, text-head config) for text-aware arms, else (None, None)."""
+    if not experiment_cfg.get("text_head"):
+        return None, None
+    provider = provider_from_config(experiment_cfg["ocr"], resolve_path)
+    head = dict(experiment_cfg["text_head"])
+    head.update({"text_dim": provider.dim, "sim_slice": list(provider.layout["class_sim"])})
+    return provider, head
 
 
 def _append_rows(path, rows, fieldnames):
@@ -100,7 +121,10 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     seed_everything(seed)
     device = torch.device(model_cfg["device"] if torch.cuda.is_available() else "cpu")
     class_agnostic = track == "agnostic"
-    train_dataset, records = build_training_dataset(experiment_cfg, model_cfg, class_agnostic)
+    if class_agnostic and experiment_cfg.get("text_head"):
+        raise ValueError("The text-aware arms are multiclass only")
+    ocr, text_head = text_setup(experiment_cfg)
+    train_dataset, records = build_training_dataset(experiment_cfg, model_cfg, class_agnostic, ocr)
     original_counts = original_train_counts()
     rare_cfg = load_yaml(resolve_path("configs/rare_classes.yaml"))
     rare_ids = {int(cid) for cid, value in rare_cfg["categories"].items()
@@ -111,7 +135,7 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     val_ids = read_split(split_dir(evaluation_dataset_cfg["split_dir"]) / "val.txt")
     val_dataset = FloorplanCocoDataset(resolve_path(evaluation_dataset_cfg["image_dir"]),
                                        resolve_path(evaluation_dataset_cfg["annotation_file"]), val_ids,
-                                       DetectionTransform())
+                                       DetectionTransform(), ocr=ocr)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False,
                             num_workers=model_cfg["num_workers"], collate_fn=collate_fn)
     num_classes = 2 if class_agnostic else 20
@@ -123,7 +147,7 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     # on --resume. The pretrained weights are overwritten from the checkpoint
     # below when restoring, and come from the local TORCH_HOME cache.
     model = build_mask_rcnn(num_classes, model_cfg["min_size"], model_cfg["max_size"],
-                            pretrained=True).to(device)
+                            pretrained=True, text_head=text_head).to(device)
     params = [parameter for parameter in model.parameters() if parameter.requires_grad]
     if model_cfg["optimizer"].lower() == "adamw":
         optimizer = torch.optim.AdamW(params, lr=model_cfg["learning_rate"],
@@ -148,6 +172,12 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     category_names = {int(cid): value["name"] for cid, value in rare_cfg["categories"].items()}
     original = json.loads(resolve_path("data/processed/instances_deduplicated.json").read_text())
     category_names.update({c["id"]: c["name"] for c in original["categories"]})
+    exposure_tags = [("A", "synthetic_A"), ("B", "synthetic_B"), ("C", "synthetic_C"),
+                     ("C_MULTI", "synthetic_C_MULTI"), ("LORA", "synthetic_LORA"),
+                     ("LORA_MULTI", "synthetic_LORA_MULTI")]
+    if "text_relabel" in experiment_cfg["dataset"]["sources"]:
+        # Only for the new arms, so older runs keep their CSV header on resume.
+        exposure_tags.append(("TEXT", "synthetic_TEXT"))
     exposure_path = output_dir / "class_exposure_by_epoch.csv"
     history_path = output_dir / "training_history.csv"
     started = time.time()
@@ -172,22 +202,13 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
         exposure_rows = []
         for category_id in sorted(category_names):
             real_seen = report["class_exposure"].get((category_id, "real"), 0)
-            a_seen = report["class_exposure"].get((category_id, "synthetic_A"), 0)
-            b_seen = report["class_exposure"].get((category_id, "synthetic_B"), 0)
-            c_seen = report["class_exposure"].get((category_id, "synthetic_C"), 0)
-            c_multi_seen = report["class_exposure"].get((category_id, "synthetic_C_MULTI"), 0)
-            lora_seen = report["class_exposure"].get((category_id, "synthetic_LORA"), 0)
-            lora_multi_seen = report["class_exposure"].get((category_id, "synthetic_LORA_MULTI"), 0)
-            exposure_rows.append({"epoch": epoch, "category_id": category_id,
-                                  "category_name": category_names[category_id],
-                                  "real_occurrences_seen": real_seen,
-                                  "synthetic_A_occurrences_seen": a_seen,
-                                  "synthetic_B_occurrences_seen": b_seen,
-                                  "synthetic_C_occurrences_seen": c_seen,
-                                  "synthetic_C_MULTI_occurrences_seen": c_multi_seen,
-                                  "synthetic_LORA_occurrences_seen": lora_seen,
-                                  "synthetic_LORA_MULTI_occurrences_seen": lora_multi_seen,
-                                  "total_occurrences_seen": real_seen + a_seen + b_seen + c_seen + c_multi_seen + lora_seen + lora_multi_seen})
+            row = {"epoch": epoch, "category_id": category_id, "category_name": category_names[category_id],
+                   "real_occurrences_seen": real_seen}
+            for name, tag in exposure_tags:
+                row[f"synthetic_{name}_occurrences_seen"] = report["class_exposure"].get((category_id, tag), 0)
+            row["total_occurrences_seen"] = real_seen + sum(
+                row[f"synthetic_{name}_occurrences_seen"] for name, _ in exposure_tags)
+            exposure_rows.append(row)
         _append_rows(exposure_path, exposure_rows, list(exposure_rows[0]))
         history = {"epoch": epoch, "training_loss": report["loss"], "validation_mask_AP": mask_ap,
                    "learning_rate": optimizer.param_groups[0]["lr"],
@@ -205,7 +226,7 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
                  "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
                  "num_classes": num_classes, "class_agnostic": class_agnostic,
                  "total_optimizer_steps": total_steps, "samples_seen": total_samples,
-                 "signature": signature, "experiment_id": experiment_cfg["id"]}
+                 "signature": signature, "experiment_id": experiment_cfg["id"], "text_head": text_head}
         torch.save(state, last_path)
         if mask_ap >= best_ap:
             torch.save(state, checkpoint_dir / "best.pth")

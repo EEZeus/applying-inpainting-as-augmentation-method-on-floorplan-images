@@ -126,3 +126,22 @@ def percentile_ci(samples, level=0.95):
     samples = np.asarray(samples, float)
     lo, hi = np.percentile(samples, [100 * (1 - level) / 2, 100 * (1 + level) / 2])
     return float(lo), float(hi)
+
+
+def paired_t(control, treatment):
+    """One-sided paired t-test of mean(treatment - control) > 0 (pairs by position)."""
+    a, b = np.asarray(control, float), np.asarray(treatment, float)
+    if len(a) != len(b):
+        raise ValueError("paired_t needs equally long, aligned samples")
+    diff = b - a
+    n = len(diff)
+    if n < 2:
+        return {"n": n, "delta": float(diff.mean()) if n else None, "t": None, "df": None, "p_one_sided": None}
+    sd = float(diff.std(ddof=1))
+    delta = float(diff.mean())
+    if sd == 0:
+        return {"n": n, "delta": delta, "sd_diff": 0.0, "t": math.inf if delta > 0 else -math.inf,
+                "df": n - 1, "p_one_sided": 0.0 if delta > 0 else 1.0}
+    t = delta / (sd / math.sqrt(n))
+    return {"n": n, "delta": delta, "sd_diff": sd, "t": t, "df": n - 1, "p_one_sided": t_sf(t, n - 1),
+            "dz": delta / sd}

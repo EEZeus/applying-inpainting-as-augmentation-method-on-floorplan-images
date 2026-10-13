@@ -14,7 +14,7 @@ from src.evaluation.evaluate import evaluate_checkpoint
 from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform
 from src.experiments.data import MATCHED_SOURCE_SUBDIRS
-from src.experiments.train import train_experiment
+from src.experiments.train import text_setup, train_experiment
 from src.utils.config import load_yaml
 from src.utils.config import resolve_path, split_dir
 from src.visualization.predictions import render_prediction_comparisons
@@ -72,7 +72,7 @@ def main():
         out_dir.mkdir(parents=True, exist_ok=True)
         metrics, rows, _ = evaluate_checkpoint(
             dataset_cfg, model_cfg, rare_cfg, checkpoint, args.eval_split, out_dir / "metrics",
-            dump_predictions=args.dump_predictions)
+            dump_predictions=args.dump_predictions, ocr=text_setup(experiment)[0])
         state = torch.load(checkpoint, map_location="cpu")
         result = {"mode": "eval_only", "eval_checkpoint": str(checkpoint),
                   "checkpoint_epoch": int(state.get("epoch", -1)) if isinstance(state, dict) else -1,
@@ -110,7 +110,7 @@ def main():
     checkpoint = output_dir / "checkpoints/best.pth"
     rare_cfg = None if args.track == "agnostic" else load_yaml(ROOT / "configs/rare_classes.yaml")
     metrics, rows, predictions = evaluate_checkpoint(
-        dataset_cfg, model_cfg, rare_cfg, checkpoint, "test", output_dir / "metrics")
+        dataset_cfg, model_cfg, rare_cfg, checkpoint, "test", output_dir / "metrics", ocr=text_setup(experiment)[0])
     test_ids = read_split(split_dir(dataset_cfg["split_dir"]) / "test.txt")
     test_dataset = FloorplanCocoDataset(resolve_path(dataset_cfg["image_dir"]),
                                         resolve_path(dataset_cfg["annotation_file"]), test_ids,

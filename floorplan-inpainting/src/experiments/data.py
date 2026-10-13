@@ -8,7 +8,7 @@ import torch
 from PIL import Image
 from torch.utils.data import ConcatDataset, Dataset, RandomSampler, Sampler, WeightedRandomSampler
 
-from src.data.coco_dataset import FloorplanCocoDataset, read_split
+from src.data.coco_dataset import FloorplanCocoDataset, ocr_target_fields, read_split
 from src.data.transforms import DetectionTransform
 from src.utils.config import resolve_path, split_dir
 
@@ -35,11 +35,22 @@ SOURCE_FILES = {
                                       "data/augmented_c_matched/copy_paste_multi", "full_plan"),
     "strategy_c_wide_matched": ("data/augmented_c_matched/inpaint_wide_multi/instances_train_augmented.json",
                                 "data/augmented_c_matched/inpaint_wide_multi", "full_plan"),
+    # OCR study (e18/e20): common rooms whose printed label was erased by
+    # inpainting and replaced with a rendered, OCR-verified rare-class name.
+    "text_relabel": ("data/augmented_text/relabel/instances_train_augmented.json",
+                     "data/augmented_text/relabel", "full_plan"),
 }
+
+# Provenance tag of the deliberately converted room, per image strategy.
+EXPOSURE_TAGS = {"a": "synthetic_A", "b": "synthetic_B", "c": "synthetic_C", "c_multi": "synthetic_C_MULTI",
+                 "lora_b": "synthetic_LORA", "lora_multi": "synthetic_LORA_MULTI",
+                 "text_relabel": "synthetic_TEXT"}
+MULTI_ROOM_STRATEGIES = {"c_multi", "lora_multi", "text_relabel"}
 
 MATCHED_SOURCE_SUBDIRS = {
     "strategy_c_copy_paste_matched": "copy_paste_multi",
     "strategy_c_wide_matched": "inpaint_wide_multi",
+    "text_relabel": "relabel",
 }
 
 
@@ -60,10 +71,10 @@ def _target_annotation_ids(coco, original):
         by_image[annotation["image_id"]].append(annotation)
     targets = set()
     for info in coco["images"]:
-        if info.get("strategy") not in {"a", "b", "c", "c_multi", "lora_b", "lora_multi"}:
+        if info.get("strategy") not in EXPOSURE_TAGS:
             continue
         annotations = by_image[info["id"]]
-        if info.get("strategy") in {"c_multi", "lora_multi"}:
+        if info.get("strategy") in MULTI_ROOM_STRATEGIES:
             originals = source.get(info.get("source_image_id"), [])
             positions = {a["id"]: index for index, a in enumerate(originals)}
             ordered = sorted(annotations, key=lambda item: item["id"])
@@ -90,7 +101,7 @@ def _target_annotation_ids(coco, original):
 
 class ExperimentCocoDataset(Dataset):
     """COCO dataset retaining multiclass provenance under agnostic labels."""
-    def __init__(self, source_name, image_ids, transform, class_agnostic=False, source_spec=None):
+    def __init__(self, source_name, image_ids, transform, class_agnostic=False, source_spec=None, ocr=None):
         if source_name not in SOURCE_FILES and source_spec is None:
             raise ValueError(f"Unknown experiment source: {source_name}")
         annotation_file, image_dir, sample_kind = source_spec or SOURCE_FILES[source_name]
@@ -100,6 +111,10 @@ class ExperimentCocoDataset(Dataset):
         self.coco = json.loads(resolve_path(annotation_file).read_text(encoding="utf-8"))
         original = json.loads(resolve_path(SOURCE_FILES["original"][0]).read_text(encoding="utf-8"))
         self.target_annotation_ids = _target_annotation_ids(self.coco, original)
+        # Real plans byte-copied into augmented datasets are renamed; their OCR
+        # entry is the one of the original file with the same image id.
+        self.ocr = ocr
+        self.original_file_names = {int(i["id"]): i["file_name"] for i in original["images"]}
         frozen_train = set(map(int, image_ids))
         # Cross-validation: the synthetic sets were generated from the original
         # 70/15/15 train split, so under a CV fold some synthetic images derive
@@ -131,8 +146,7 @@ class ExperimentCocoDataset(Dataset):
             for annotation in self.annotations[info["id"]]:
                 source = "real"
                 if annotation["id"] in self.target_annotation_ids:
-                    source = {"a": "synthetic_A", "b": "synthetic_B", "c": "synthetic_C", "c_multi": "synthetic_C_MULTI", "lora_b": "synthetic_LORA", "lora_multi": "synthetic_LORA_MULTI"}[
-                        info.get("strategy")]
+                    source = EXPOSURE_TAGS[info.get("strategy")]
                 occurrences.append({"category_id": int(annotation["category_id"]), "source": source})
             self.records.append({"image_id": info["id"], "sample_kind": sample_kind,
                                  "source_name": source_name, "occurrences": occurrences,
@@ -157,8 +171,7 @@ class ExperimentCocoDataset(Dataset):
             labels.append(1 if self.class_agnostic else annotation["category_id"])
             source = "real"
             if annotation["id"] in self.target_annotation_ids:
-                source = {"a": "synthetic_A", "b": "synthetic_B", "c": "synthetic_C", "c_multi": "synthetic_C_MULTI", "lora_b": "synthetic_LORA", "lora_multi": "synthetic_LORA_MULTI"}[
-                    info.get("strategy")]
+                source = EXPOSURE_TAGS[info.get("strategy")]
             exposure.append({"category_id": int(annotation["category_id"]), "source": source})
         if masks:
             masks_tensor = torch.as_tensor(np.stack(masks), dtype=torch.uint8)
@@ -175,17 +188,25 @@ class ExperimentCocoDataset(Dataset):
                   "area": masks_tensor.flatten(1).sum(1).to(torch.float32),
                   "iscrowd": torch.zeros(len(labels), dtype=torch.int64),
                   "_exposure": exposure, "_sample_kind": self.sample_kind}
+        if self.ocr is not None:
+            target.update(ocr_target_fields(self.ocr, self.ocr_key(info), width, height))
         return self.transform(image, target) if self.transform else (image, target)
 
+    def ocr_key(self, info):
+        if info.get("synthetic"):
+            return info["file_name"]
+        return self.original_file_names[int(info["id"])]
 
-def build_training_dataset(experiment_cfg, model_cfg, class_agnostic=False):
+
+def build_training_dataset(experiment_cfg, model_cfg, class_agnostic=False, ocr=None):
     train_ids = read_split(split_dir() / "train.txt")
     transform = DetectionTransform(True, model_cfg["horizontal_flip_probability"],
                                    model_cfg["brightness"], model_cfg["contrast"])
     sources = experiment_cfg["dataset"]["sources"]
     overrides = experiment_cfg["dataset"].get("source_overrides", {})
     datasets = [ExperimentCocoDataset(name, train_ids, transform, class_agnostic,
-                tuple(overrides[name][key] for key in ("annotation_file", "image_dir", "sample_kind")) if name in overrides else None)
+                tuple(overrides[name][key] for key in ("annotation_file", "image_dir", "sample_kind")) if name in overrides else None,
+                ocr)
                 for name in sources]
     if not datasets or any(len(dataset) == 0 for dataset in datasets):
         raise ValueError("Every configured training source must be non-empty")

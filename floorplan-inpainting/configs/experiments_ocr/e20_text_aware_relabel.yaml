@@ -1,0 +1,19 @@
+id: e20
+method: Text-aware Mask R-CNN + label-rewrite inpainting
+base_model_config: configs/baseline.yaml
+tracks: [multiclass]
+dataset:
+  sources: [text_relabel]
+sampling:
+  mode: paired_variant
+  variant_probability: 0.5
+budget:
+  steps_per_epoch: 35
+text_head:
+  hidden: 256
+  token_dropout: 0.15
+  image_dropout: 0.15
+ocr:
+  caches: [data/ocr/original_tokens.json, data/augmented_text/relabel/ocr_tokens.json]
+  features: [data/ocr/original_features.npz, data/augmented_text/relabel/ocr_features.npz]
+output_root: outputs/ocr_study

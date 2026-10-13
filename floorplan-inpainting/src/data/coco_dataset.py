@@ -10,8 +10,9 @@ from torch.utils.data import Dataset
 
 
 class FloorplanCocoDataset(Dataset):
-    def __init__(self, image_dir, annotation_file, image_ids=None, transforms=None):
+    def __init__(self, image_dir, annotation_file, image_ids=None, transforms=None, ocr=None):
         self.image_dir = Path(image_dir)
+        self.ocr = ocr
         self.annotation_file = str(annotation_file)
         self.transforms = transforms
         with Path(annotation_file).open(encoding="utf-8") as handle:
@@ -77,6 +78,8 @@ class FloorplanCocoDataset(Dataset):
             "area": masks_tensor.flatten(1).sum(1).to(torch.float32),
             "iscrowd": torch.zeros(len(labels), dtype=torch.int64),
         }
+        if self.ocr is not None:
+            target.update(ocr_target_fields(self.ocr, info["file_name"], width, height))
         if self.transforms:
             image, target = self.transforms(image, target)
         return image, target
@@ -84,3 +87,10 @@ class FloorplanCocoDataset(Dataset):
 
 def read_split(path):
     return [int(line) for line in Path(path).read_text().splitlines() if line.strip()]
+
+
+def ocr_target_fields(provider, file_name, width, height):
+    """Private target keys holding the OCR label tokens of one plan."""
+    boxes, feats, conf = provider.get(file_name, width, height)
+    return {"_ocr_boxes": torch.from_numpy(boxes), "_ocr_feats": torch.from_numpy(feats),
+            "_ocr_conf": torch.from_numpy(conf)}

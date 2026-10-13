@@ -1,0 +1,14 @@
+id: e18
+method: Label-rewrite inpainting (OCR-verified rare names), plain Mask R-CNN
+base_model_config: configs/baseline.yaml
+tracks: [multiclass]
+dataset:
+  sources: [text_relabel]
+sampling:
+  # e0's per-epoch plan order at the same seed; each real plan with synthetic
+  # variants is swapped for one of them with this probability.
+  mode: paired_variant
+  variant_probability: 0.5
+budget:
+  steps_per_epoch: 35
+output_root: outputs/ocr_study

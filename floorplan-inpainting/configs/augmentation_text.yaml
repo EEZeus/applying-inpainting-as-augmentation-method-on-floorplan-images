@@ -1,0 +1,61 @@
+# OCR study: label-consistent common-to-rare synthesis (src/augmentation/text_relabel.py).
+# Fixed before any detector run; nothing here is tuned on validation or test plans.
+seed: 3042
+
+dataset:
+  annotation_file: data/processed/instances_deduplicated.json
+  image_dir: ../area_segmentation_coco/images
+  train_split: data/splits/train.txt
+  ocr_cache: data/ocr/original_tokens.json
+
+classes:
+  # Frequent rooms donate geometry; the six primary rare classes are targets.
+  source_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  target_ids: [11, 12, 13, 14, 15, 16]
+
+# Strategy B screening and budget: min(3 * real_train_count, 20) - real_train_count rooms per class.
+geometry:
+  tolerance: 0.50
+balancing:
+  mode: capped_multiplier
+  multiplier: 3
+  max_target_instances: 20
+
+# Each planned room is edited this many times (different name sample and seed);
+# variant v of a plan converts all of its planned rooms with their v-th edit.
+variants_per_room: 2
+
+edit:
+  erosion_fraction: 0.02
+  min_erosion_px: 2
+  max_erosion_px: 12
+  erase_pad_fraction: 0.20
+  eraser: diffusion          # telea is the automatic fallback when the diffusion fill fails erase_qc
+  output_size: 512
+  erase_prompt: >-
+    clean empty area of a technical architectural floor plan drawing, plain flat background, no text
+  erase_qc:
+    dark_level: 110
+    max_dark_fraction: 0.03
+    max_color_error: 25.0
+    max_std: 30.0
+
+verify:
+  similarity_threshold: 0.75
+  crop_margin_fraction: 0.10
+
+generation:
+  backend: stable_diffusion_inpaint
+  model_name: stable-diffusion-v1-5/stable-diffusion-inpainting
+  model_revision: null
+  cache_dir: data/cache/huggingface
+  device: cuda
+  dtype: fp16
+  num_inference_steps: 25
+  guidance_scale: 5.0
+  negative_prompt: >-
+    text, letters, words, numbers, writing, characters, symbols, lines, hatching, stains
+
+output:
+  generation_dir: data/augmented_text/generation
+  dataset_dir: data/augmented_text/relabel

@@ -17,17 +17,22 @@ from src.utils.config import load_yaml, resolve_path, split_dir
 
 
 def evaluate_checkpoint(dataset_cfg, model_cfg, rare_cfg, checkpoint, split="test", output_dir="outputs/metrics",
-                        dump_predictions=False):
+                        dump_predictions=False, ocr=None):
     annotation_file = resolve_path(dataset_cfg["annotation_file"])
     ids = read_split(split_dir(dataset_cfg["split_dir"]) / f"{split}.txt")
-    dataset = FloorplanCocoDataset(resolve_path(dataset_cfg["image_dir"]), annotation_file, ids, DetectionTransform())
+    state = torch.load(checkpoint, map_location="cpu")
+    text_head = state.get("text_head") if isinstance(state, dict) else None
+    if text_head and ocr is None:
+        raise ValueError("Checkpoint is text-aware; pass the OCR provider of its experiment config")
+    dataset = FloorplanCocoDataset(resolve_path(dataset_cfg["image_dir"]), annotation_file, ids, DetectionTransform(),
+                                   ocr=ocr if text_head else None)
     category_ids = sorted(category["id"] for category in dataset.coco_data["categories"])
     if category_ids != dataset_cfg["category_ids"] or dataset_cfg["num_classes"] != len(category_ids) + 1:
         raise ValueError("Dataset category IDs and configured num_classes disagree")
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=model_cfg["num_workers"], collate_fn=collate_fn)
     device = torch.device(model_cfg["device"] if torch.cuda.is_available() else "cpu")
-    model = build_mask_rcnn(dataset_cfg["num_classes"], model_cfg["min_size"], model_cfg["max_size"], pretrained=False)
-    state = torch.load(checkpoint, map_location="cpu")
+    model = build_mask_rcnn(dataset_cfg["num_classes"], model_cfg["min_size"], model_cfg["max_size"], pretrained=False,
+                            text_head=text_head)
     if isinstance(state, dict) and "num_classes" in state and state["num_classes"] != dataset_cfg["num_classes"]:
         raise ValueError(
             f"Checkpoint has {state['num_classes']} classes but dataset config requires {dataset_cfg['num_classes']}"
