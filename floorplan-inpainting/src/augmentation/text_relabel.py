@@ -41,8 +41,8 @@ _RENDERABLE = re.compile(r"^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\- ]*$")
 def room_label_words(tokens, min_conf=0.6, min_letters=3):
     """Clean room names from the OCR tokens inside one room.
 
-    Labels wrap over lines ("Abstell-" / "raum"): a token ending in a hyphen is
-    joined with the next label token below it. A word is kept only if every
+    Labels wrap over lines ("Abstell-" / "raum"): a token ending in a hyphen,
+    or followed by a token starting in lower case, is joined with that token. A word is kept only if every
     part was read with confidence >= min_conf, it starts with a capital letter
     (German room names are nouns), has >= min_letters letters and contains no
     OCR debris characters.
@@ -54,14 +54,16 @@ def room_label_words(tokens, min_conf=0.6, min_letters=3):
         if i in skip:
             continue
         text, conf = strip_digits(token["text"]), float(token["conf"])
-        if str(token["text"]).rstrip().endswith("-") and i + 1 < len(labels):
-            following = labels[i + 1]
+        following = labels[i + 1] if i + 1 < len(labels) else None
+        continuation = following is not None and strip_digits(following["text"])[:1].islower()
+        if following is not None and (str(token["text"]).rstrip().endswith("-") or continuation):
             text = text + strip_digits(following["text"]).lower()
             conf = min(conf, float(following["conf"]))
             skip.add(i + 1)
         text = " ".join(text.split()).strip(" .-")
+        parts = re.split(r"[ \-]+", text)
         if (conf >= min_conf and sum(ch.isalpha() for ch in text) >= min_letters
-                and _RENDERABLE.match(text)):
+                and _RENDERABLE.match(text) and all(sum(ch.isalpha() for ch in part) >= 2 for part in parts)):
             words.append(text)
     return words
 
