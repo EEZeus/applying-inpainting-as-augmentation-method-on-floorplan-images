@@ -88,3 +88,17 @@ The 21 held-out plans come from three buildings and were used to evaluate
 earlier arms; they are not a fresh test set. The control arm e0 was trained
 before this study with code that differs only in the added, unused text path.
 GPU types are not balanced across runs.
+
+## Amendment 1 (2026-10-13, before any detector run)
+
+A generation dry-run on 6 real training rooms (written to a separate scratch
+directory, not used for training) showed that the token-level OCR vocabulary
+contained line-wrap fragments ("raum", "arde") and misreads ("gchleuse"). The
+render vocabulary is now built from room-level names: a label token is joined
+with the next one when it ends in a hyphen or the next starts in lower case
+with at least 3 letters; a name is kept only if all parts have OCR confidence
+>= 0.6, it starts with a capital letter, has >= 3 letters, every part has >= 2
+letters and it contains only letters, spaces, hyphens and periods. In the same
+dry-run the diffusion erase failed the erase check in 10 of 10 rooms and the
+pre-specified Telea fallback passed; the erase rule is unchanged. Hypotheses,
+arms, endpoint and tests are unchanged.

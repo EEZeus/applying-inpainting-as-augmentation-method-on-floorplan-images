@@ -55,7 +55,8 @@ def room_label_words(tokens, min_conf=0.6, min_letters=3):
             continue
         text, conf = strip_digits(token["text"]), float(token["conf"])
         following = labels[i + 1] if i + 1 < len(labels) else None
-        continuation = following is not None and strip_digits(following["text"])[:1].islower()
+        tail = strip_digits(following["text"]) if following is not None else ""
+        continuation = tail[:1].islower() and sum(ch.isalpha() for ch in tail) >= 3
         if following is not None and (str(token["text"]).rstrip().endswith("-") or continuation):
             text = text + strip_digits(following["text"]).lower()
             conf = min(conf, float(following["conf"]))

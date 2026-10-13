@@ -198,3 +198,4 @@ def test_room_label_words_merges_hyphenation_and_drops_ocr_debris():
     assert room_label_words([tok("Abst.", 0)]) == ["Abst"]
     assert room_label_words([tok("Abstell", 0), tok("raum", 14)]) == ["Abstellraum"]
     assert room_label_words([tok("T O-RS", 0)]) == []
+    assert room_label_words([tok("Konferenz", 0), tok("nz", 14)]) == ["Konferenz"]
