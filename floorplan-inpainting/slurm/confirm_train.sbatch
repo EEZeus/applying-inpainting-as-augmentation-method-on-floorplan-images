@@ -33,6 +33,10 @@ declare -A CFGMAP=(
   [e18]=configs/experiments_ocr/e18_text_relabel.yaml
   [e19]=configs/experiments_ocr/e19_text_aware.yaml
   [e20]=configs/experiments_ocr/e20_text_aware_relabel.yaml
+  [e21]=configs/experiments_followup/e21_text_aware_adamw.yaml
+  [e22]=configs/experiments_followup/e22_c_balance_b20.yaml
+  [e23]=configs/experiments_followup/e23_c_balance_b50.yaml
+  [e24]=configs/experiments_followup/e24_c_balance_b100.yaml
 )
 TID=${SLURM_ARRAY_TASK_ID}
 ARM_IDX=$(( TID / N_SEEDS ))

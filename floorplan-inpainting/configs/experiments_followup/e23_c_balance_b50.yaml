@@ -1,0 +1,12 @@
+id: e23
+method: Copy-paste towards class balance (50 instances per rare class)
+base_model_config: configs/baseline.yaml
+tracks: [multiclass]
+dataset:
+  sources: [strategy_c_balance_b50]
+sampling:
+  mode: paired_variant
+  variant_probability: 0.5
+budget:
+  steps_per_epoch: 35
+output_root: outputs/followup

@@ -39,6 +39,10 @@ SOURCE_FILES = {
     # inpainting and replaced with a rendered, OCR-verified rare-class name.
     "text_relabel": ("data/augmented_text/relabel/instances_train_augmented.json",
                      "data/augmented_text/relabel", "full_plan"),
+    # Follow-up (e22-e24): Strategy C copy-paste scaled towards class balance.
+    **{f"strategy_c_balance_b{dose}": (
+        f"data/augmented_c_balance/b{dose}/copy_paste_multi/instances_train_augmented.json",
+        f"data/augmented_c_balance/b{dose}/copy_paste_multi", "full_plan") for dose in (20, 50, 100)},
 }
 
 # Provenance tag of the deliberately converted room, per image strategy.

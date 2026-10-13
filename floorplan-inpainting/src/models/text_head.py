@@ -39,8 +39,12 @@ class ProposalRecorder(nn.Module):
         return self.pool(features, proposals, image_shapes)
 
 
-def roi_text_features(proposals, image_shapes, tokens, sim_slice):
-    """[sum R_i, D + S + 2] pooled token features for all proposals."""
+def roi_text_features(proposals, image_shapes, tokens, sim_slice, min_inside=None):
+    """[sum R_i, D + S + 2] pooled token features for all proposals.
+
+    A token belongs to a proposal if its box centre lies inside it (default) or,
+    with ``min_inside``, if at least that fraction of the token box lies inside.
+    """
     rows = []
     for boxes, shape, (token_boxes, feats, conf) in zip(proposals, image_shapes, tokens):
         height, width = float(shape[0]), float(shape[1])
@@ -51,10 +55,17 @@ def roi_text_features(proposals, image_shapes, tokens, sim_slice):
         if token_boxes.shape[0] == 0 or n_rois == 0:
             rows.append(boxes.new_zeros((n_rois, dim + n_sim + 2)))
             continue
-        cx = (token_boxes[:, 0] + token_boxes[:, 2]) / 2
-        cy = (token_boxes[:, 1] + token_boxes[:, 3]) / 2
-        inside = ((cx[None] >= norm[:, 0:1]) & (cx[None] <= norm[:, 2:3])
-                  & (cy[None] >= norm[:, 1:2]) & (cy[None] <= norm[:, 3:4]))
+        if min_inside is None:
+            cx = (token_boxes[:, 0] + token_boxes[:, 2]) / 2
+            cy = (token_boxes[:, 1] + token_boxes[:, 3]) / 2
+            inside = ((cx[None] >= norm[:, 0:1]) & (cx[None] <= norm[:, 2:3])
+                      & (cy[None] >= norm[:, 1:2]) & (cy[None] <= norm[:, 3:4]))
+        else:
+            tb = token_boxes.to(norm.dtype)
+            ix = (torch.minimum(norm[:, None, 2], tb[None, :, 2]) - torch.maximum(norm[:, None, 0], tb[None, :, 0])).clamp(min=0)
+            iy = (torch.minimum(norm[:, None, 3], tb[None, :, 3]) - torch.maximum(norm[:, None, 1], tb[None, :, 1])).clamp(min=0)
+            area = ((tb[:, 2] - tb[:, 0]) * (tb[:, 3] - tb[:, 1])).clamp(min=1e-12)
+            inside = (ix * iy) / area[None] >= float(min_inside)
         weights = inside.to(feats.dtype) * conf[None].to(feats.dtype)
         total = weights.sum(1, keepdim=True)
         mean = (weights @ feats) / total.clamp(min=1e-6)
@@ -68,7 +79,8 @@ def roi_text_features(proposals, image_shapes, tokens, sim_slice):
 
 
 class TextAwarePredictor(nn.Module):
-    def __init__(self, base, context, text_dim, sim_slice, hidden=256, token_dropout=0.15, image_dropout=0.15):
+    def __init__(self, base, context, text_dim, sim_slice, hidden=256, token_dropout=0.15, image_dropout=0.15,
+                 min_inside=None):
         super().__init__()
         self.cls_score = base.cls_score
         self.bbox_pred = base.bbox_pred
@@ -82,6 +94,7 @@ class TextAwarePredictor(nn.Module):
         nn.init.zeros_(self.text_mlp[2].bias)
         self.token_dropout = float(token_dropout)
         self.image_dropout = float(image_dropout)
+        self.min_inside = None if min_inside is None else float(min_inside)
 
     def _tokens(self):
         tokens = self.context.tokens
@@ -102,7 +115,7 @@ class TextAwarePredictor(nn.Module):
         if x.dim() == 4:
             x = torch.flatten(x, start_dim=1)
         text = roi_text_features(self.context.proposals, self.context.image_shapes, self._tokens(),
-                                 self.sim_slice)
+                                 self.sim_slice, self.min_inside)
         if text.shape[0] != x.shape[0]:
             raise RuntimeError(f"RoI count mismatch: {text.shape[0]} text rows vs {x.shape[0]} features")
         scores = self.cls_score(x + self.text_mlp(text.to(x.dtype)))
@@ -117,7 +130,7 @@ def attach_text_head(model, text_head_cfg):
     heads.box_predictor = TextAwarePredictor(
         heads.box_predictor, context, text_head_cfg["text_dim"], text_head_cfg["sim_slice"],
         text_head_cfg.get("hidden", 256), text_head_cfg.get("token_dropout", 0.15),
-        text_head_cfg.get("image_dropout", 0.15))
+        text_head_cfg.get("image_dropout", 0.15), text_head_cfg.get("min_inside"))
     model.text_context = context
     return model
 
@@ -135,3 +148,9 @@ def set_text_tokens(model, targets, device):
         tokens.append((target["_ocr_boxes"].to(device), target["_ocr_feats"].to(device),
                        target["_ocr_conf"].to(device)))
     model.text_context.tokens = tokens
+
+
+def text_parameters(model):
+    """Names and parameters of the text branch (for a separate optimizer)."""
+    return [(name, param) for name, param in model.named_parameters()
+            if ".text_mlp." in name and param.requires_grad]

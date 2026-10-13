@@ -1,0 +1,105 @@
+# Follow-up X1 (docs/preregistration_followup.md): Strategy C copy-paste scaled
+# towards class balance; every rare class targets 20 training instances
+# (real + converted), limited by compatible geometry and donor reuse.
+seed: 2042
+
+dataset:
+  annotation_file: data/processed/instances_deduplicated.json
+  image_dir: ../area_segmentation_coco/images
+  train_split: data/splits/train.txt
+  rare_classes_file: configs/rare_classes.yaml
+
+classes:
+  # Frequent rooms may donate a target geometry/context. All primary rare classes
+  # may donate genuine semantic pixels. Labor and low-support classes stay out.
+  source_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  target_ids: [11, 12, 13, 14, 15, 16]
+
+geometry:
+  tolerance: 0.50
+
+selection:
+  max_donor_reuse: 4
+
+balancing:
+  mode: capped_multiplier
+  multiplier: 1000
+  max_target_instances: 20
+
+# E8 composes accepted C0 edits from the same source plan. The number of
+# frequent rooms replaced in each synthetic plan is sampled uniformly here.
+multi_room:
+  # One synthetic variant per source plan converting all of its planned rooms.
+  replacement_percentage: 100
+  random_jitter_percentage_points: 0
+
+crop:
+  context_fraction: 1.0
+  output_size: 512
+
+mask:
+  erosion_fraction: 0.02
+  min_erosion_px: 2
+  max_erosion_px: 12
+  # Strategy C overrides this to false: old common-room text/symbols must be
+  # erased. It is retained here for compatibility with shared validation.
+  structure_protection: false
+  dark_threshold: auto
+  structure_dilation_px: 0
+  min_mutable_fraction: 0.20
+  min_mutable_fraction_by_category: {}
+
+integration:
+  feather_pixels: 5
+  seam_width_pixels: 6
+
+prompt:
+  template: >-
+    architectural technical floor plan, {category_name}, clean 2D line drawing,
+    harmonize the provided real room exemplar, preserve its technical symbols,
+    preserve the existing room boundary, white background
+  negative_prompt: >-
+    photorealistic, 3d render, perspective, people, random text, illegible text,
+    dense texture, black fill, colored noise
+
+generation:
+  backend: stable_diffusion_inpaint
+  model_name: stable-diffusion-v1-5/stable-diffusion-inpainting
+  model_revision: null
+  cache_dir: data/cache/huggingface
+  device: cuda
+  dtype: fp16
+  num_inference_steps: 25
+  guidance_scale: 5.0
+  # Low strength restricts the model to harmonization instead of reinvention.
+  strength: 0.30
+  variants_per_instance: 1
+
+quality:
+  require_zero_outside_changes: true
+  require_zero_boundary_changes: true
+  min_changed_fraction_inside: 0.01
+  min_mean_absolute_change: 1.0
+  min_generated_region_std: 2.0
+  max_near_white_fraction_after: 0.995
+  max_dark_fraction_after: 0.70
+  max_dark_fraction_increase: 0.50
+  max_saturated_fraction_after: 0.60
+  max_saturated_fraction_increase: 0.40
+
+semantic_quality:
+  min_donor_coverage_fraction: 0.50
+  min_donor_dark_pixels: 10
+  min_dark_retention_fraction: 0.95
+  dark_tolerance: 15
+
+output:
+  dataset_root: data/augmented_c_balance/b20
+  qa_root: outputs/augmentation_c_balance/b20
+
+qa:
+  max_examples: 36
+  rows_per_sheet: 4
+
+runtime:
+  num_workers: 2

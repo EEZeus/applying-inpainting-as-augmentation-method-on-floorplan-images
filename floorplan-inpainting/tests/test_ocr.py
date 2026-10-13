@@ -199,3 +199,28 @@ def test_room_label_words_merges_hyphenation_and_drops_ocr_debris():
     assert room_label_words([tok("Abstell", 0), tok("raum", 14)]) == ["Abstellraum"]
     assert room_label_words([tok("T O-RS", 0)]) == []
     assert room_label_words([tok("Konferenz", 0), tok("nz", 14)]) == ["Konferenz"]
+
+
+def test_containment_pooling_excludes_tokens_straddling_the_proposal():
+    proposals = [torch.tensor([[0., 0., 50., 50.]])]
+    feats = torch.eye(4)[:2]
+    boxes = torch.tensor([[0.1, 0.1, 0.2, 0.2], [0.4, 0.4, 0.8, 0.45]])  # second: centre outside, 25% inside
+    centre = roi_text_features(proposals, [(100, 100)], [(boxes, feats, torch.ones(2))], (2, 4))
+    contain = roi_text_features(proposals, [(100, 100)], [(boxes, feats, torch.ones(2))], (2, 4), min_inside=0.2)
+    strict = roi_text_features(proposals, [(100, 100)], [(boxes, feats, torch.ones(2))], (2, 4), min_inside=0.5)
+    assert torch.allclose(centre[0, :4], feats[0]) and torch.allclose(strict[0, :4], feats[0])
+    assert torch.allclose(contain[0, :4], (feats[0] + feats[1]) / 2)
+
+
+@pytest.mark.parametrize("name", ["e21_text_aware_adamw", "e22_c_balance_b20", "e23_c_balance_b50",
+                                  "e24_c_balance_b100"])
+def test_followup_configs_are_whitelisted(name):
+    _validate_experiment(load_yaml(resolve_path(f"configs/experiments_followup/{name}.yaml")))
+
+
+def test_text_branch_parameters_are_separable():
+    from src.models.text_head import text_parameters
+    model = _tiny_model(True)
+    names = [name for name, _ in text_parameters(model)]
+    assert names and all(".text_mlp." in n for n in names)
+    assert len(names) == 4

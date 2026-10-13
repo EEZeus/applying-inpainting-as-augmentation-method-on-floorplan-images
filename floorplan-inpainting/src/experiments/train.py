@@ -54,8 +54,14 @@ def _validate_experiment(experiment_cfg):
         "e18": (["text_relabel"], "paired_variant", False),
         "e19": (["original"], "uniform", False),
         "e20": (["text_relabel"], "paired_variant", False),
+        # Follow-up (exploratory): text branch with its own optimizer and
+        # containment pooling (e21); balanced copy-paste dose-response (e22-e24).
+        "e21": (["original"], "uniform", False),
+        "e22": (["strategy_c_balance_b20"], "paired_variant", False),
+        "e23": (["strategy_c_balance_b50"], "paired_variant", False),
+        "e24": (["strategy_c_balance_b100"], "paired_variant", False),
     }
-    text_aware_ids = {"e19", "e20"}
+    text_aware_ids = {"e19", "e20", "e21"}
     experiment_id = experiment_cfg["id"]
     if experiment_id not in expected:
         raise ValueError(f"Unknown required experiment ID: {experiment_id}")
@@ -148,7 +154,22 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     # below when restoring, and come from the local TORCH_HOME cache.
     model = build_mask_rcnn(num_classes, model_cfg["min_size"], model_cfg["max_size"],
                             pretrained=True, text_head=text_head).to(device)
-    params = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    text_optimizer = None
+    if text_head and text_head.get("optimizer"):
+        if text_head["optimizer"] != "adamw":
+            raise ValueError("text_head.optimizer must be adamw")
+        from src.models.text_head import text_parameters
+        text_params = text_parameters(model)
+        if not text_params:
+            raise ValueError("Text-aware model has no text parameters")
+        excluded = {id(param) for _, param in text_params}
+        params = [p for p in model.parameters() if p.requires_grad and id(p) not in excluded]
+        # The text branch starts at zero; a separate AdamW without step decay lets it
+        # learn within the fixed 875-step budget while the detector keeps e0's SGD.
+        text_optimizer = torch.optim.AdamW([param for _, param in text_params], lr=float(text_head["lr"]),
+                                           weight_decay=float(text_head.get("weight_decay", 1e-4)))
+    else:
+        params = [parameter for parameter in model.parameters() if parameter.requires_grad]
     if model_cfg["optimizer"].lower() == "adamw":
         optimizer = torch.optim.AdamW(params, lr=model_cfg["learning_rate"],
                                       weight_decay=model_cfg["weight_decay"])
@@ -165,6 +186,8 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
             raise ValueError("Checkpoint provenance does not match this run")
         model.load_state_dict(state["model"]); optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
+        if text_optimizer is not None:
+            text_optimizer.load_state_dict(state["text_optimizer"])
         start_epoch = int(state["epoch"]) + 1
         best_ap, total_steps = float(state["best_val_mask_AP"]), int(state["total_optimizer_steps"])
         total_samples, prior_runtime = int(state["samples_seen"]), float(state["runtime_seconds"])
@@ -187,7 +210,8 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
         loader = DataLoader(train_dataset, batch_size=model_cfg["batch_size"], sampler=sampler,
                             num_workers=model_cfg["num_workers"], collate_fn=collate_fn,
                             pin_memory=device.type == "cuda", drop_last=True)
-        report = train_one_epoch(model, loader, optimizer, device, scaler, epoch)
+        report = train_one_epoch(model, loader, [optimizer] + ([text_optimizer] if text_optimizer else []),
+                                 device, scaler, epoch)
         if report["optimizer_steps"] != steps_per_epoch:
             raise RuntimeError("Fixed optimizer-step budget was not respected")
         scheduler.step()
@@ -227,6 +251,8 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
                  "num_classes": num_classes, "class_agnostic": class_agnostic,
                  "total_optimizer_steps": total_steps, "samples_seen": total_samples,
                  "signature": signature, "experiment_id": experiment_cfg["id"], "text_head": text_head}
+        if text_optimizer is not None:
+            state["text_optimizer"] = text_optimizer.state_dict()
         torch.save(state, last_path)
         if mask_ap >= best_ap:
             torch.save(state, checkpoint_dir / "best.pth")

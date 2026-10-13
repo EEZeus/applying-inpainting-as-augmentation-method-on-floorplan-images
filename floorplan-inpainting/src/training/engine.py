@@ -13,6 +13,7 @@ def move_targets(targets, device):
 
 
 def train_one_epoch(model, loader, optimizer, device, scaler, epoch):
+    optimizers = list(optimizer) if isinstance(optimizer, (list, tuple)) else [optimizer]
     """Train once and return loss, budget, source mix, and class exposure.
 
     Experiment datasets may attach private ``_exposure`` and ``_sample_kind``
@@ -40,12 +41,14 @@ def train_one_epoch(model, loader, optimizer, device, scaler, epoch):
         ]
         images = [image.to(device) for image in images]
         targets = move_targets(targets, device)
-        optimizer.zero_grad(set_to_none=True)
+        for item in optimizers:
+            item.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, enabled=scaler.is_enabled()):
             losses = model(images, targets)
             loss = sum(losses.values())
         scaler.scale(loss).backward()
-        scaler.step(optimizer)
+        for item in optimizers:
+            scaler.step(item)
         scaler.update()
         optimizer_steps += 1
         running += loss.item()

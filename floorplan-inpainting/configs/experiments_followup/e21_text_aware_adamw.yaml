@@ -1,0 +1,26 @@
+id: e21
+method: Text-aware Mask R-CNN, text branch with own AdamW and containment pooling
+base_model_config: configs/baseline.yaml
+tracks: [multiclass]
+dataset:
+  sources: [original]
+sampling:
+  mode: uniform
+  lambda: 2.0
+  max_image_weight: 5.0
+budget:
+  steps_per_epoch: 35
+text_head:
+  hidden: 256
+  token_dropout: 0.15
+  image_dropout: 0.15
+  # Only tokens with >= 50% of their box inside the proposal (no neighbour labels).
+  min_inside: 0.5
+  # Separate AdamW for the zero-initialised text branch, no step decay.
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.0001
+ocr:
+  caches: [data/ocr/original_tokens.json]
+  features: [data/ocr/original_features.npz]
+output_root: outputs/followup
