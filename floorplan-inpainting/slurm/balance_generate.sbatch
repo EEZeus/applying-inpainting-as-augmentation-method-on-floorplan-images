@@ -1,6 +1,5 @@
 #!/bin/bash
-# Follow-up X1: Strategy C copy-paste at one dose per array task (0=b20, 1=b50, 2=b100),
-# then compose the multi-room dataset. No diffusion, CPU only.
+# Follow-up X1: copy-paste dataset per dose (task 0=b20, 1=b50, 2=b100). CPU only.
 #SBATCH --job-name=fp-balance-gen
 #SBATCH --array=0-2
 #SBATCH --cpus-per-task=8

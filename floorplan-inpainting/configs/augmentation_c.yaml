@@ -7,8 +7,7 @@ dataset:
   rare_classes_file: configs/rare_classes.yaml
 
 classes:
-  # Frequent rooms may donate a target geometry/context. All primary rare classes
-  # may donate genuine semantic pixels. Labor and low-support classes stay out.
+  # Frequent rooms donate the target geometry, primary rare classes donate the pixels.
   source_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   target_ids: [11, 12, 13, 14, 15, 16]
 
@@ -23,8 +22,7 @@ balancing:
   multiplier: 3
   max_target_instances: 20
 
-# E8 composes accepted C0 edits from the same source plan. The number of
-# frequent rooms replaced in each synthetic plan is sampled uniformly here.
+# E8 composes accepted C0 edits from the same source plan into one synthetic plan.
 multi_room:
   replacement_percentage: 5
   random_jitter_percentage_points: 2
@@ -37,8 +35,7 @@ mask:
   erosion_fraction: 0.02
   min_erosion_px: 2
   max_erosion_px: 12
-  # Strategy C overrides this to false: old common-room text/symbols must be
-  # erased. It is retained here for compatibility with shared validation.
+  # Off for Strategy C: old common-room text and symbols must be erased.
   structure_protection: false
   dark_threshold: auto
   structure_dilation_px: 0
@@ -67,7 +64,7 @@ generation:
   dtype: fp16
   num_inference_steps: 25
   guidance_scale: 5.0
-  # Low strength restricts the model to harmonization instead of reinvention.
+  # Low strength limits the model to harmonization.
   strength: 0.30
   variants_per_instance: 1
 

@@ -1,7 +1,5 @@
 #!/bin/bash
-# Stage R of the confirm chain: evaluate every existing grid checkpoint's
-# last.pth (epoch 25, never selected on val) on all 21 held-out plans and dump
-# raw predictions. 14 arms x 2 tracks x 3 seeds = 84 eval-only tasks.
+# Confirm stage R: evaluate last.pth of all 84 grid runs on the 21 held-out plans.
 # Task id = (arm_idx * 2 + track_idx) * 3 + seed_idx.
 #SBATCH --job-name=fp-confirm-rescore
 #SBATCH --array=0-83%24
@@ -36,7 +34,7 @@ CFG=(
   configs/experiments_lora/e12_lora_b.yaml
   configs/experiments_lora/e13_lora_b_weighted.yaml
 )
-# Same checkpoint roots as scripts/analyze_grid.py (the grid's source of truth).
+# Same checkpoint roots as scripts/analyze_grid.py.
 CKPT_ROOT=(
   outputs/experiments outputs/experiments outputs/experiments outputs/experiments
   outputs/experiments outputs/experiments outputs/experiments outputs/experiments

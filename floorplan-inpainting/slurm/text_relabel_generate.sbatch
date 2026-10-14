@@ -1,6 +1,5 @@
 #!/bin/bash
-# OCR study, stage 4 data: erase OCR'd labels of planned frequent rooms with SD
-# inpainting and render rare-class names (training plans only).
+# OCR study data: erase labels of planned frequent rooms and render rare-class names (train only).
 #SBATCH --job-name=fp-text-gen
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6
@@ -12,7 +11,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONPATH="$PWD:${PYTHONPATH:-}"
 export MPLBACKEND=Agg OMP_NUM_THREADS=4
-# The stored HF token expired (401 even for public repos); SD weights are cached locally.
+# The stored HF token expired; SD weights are cached locally.
 export HF_HUB_OFFLINE=1
 PY=/netscratch/espandar/miniconda3/envs/inpainting/bin/python
 "$PY" -c "import torch; assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))"

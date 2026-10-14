@@ -13,8 +13,6 @@ SAM3_ROOT="${SAM3_ROOT:-/netscratch/espandar/sam3}"
 SAM3_ENV="${SAM3_ENV:-/netscratch/espandar/miniconda3/envs/sam3}"
 export SAM3_ROOT
 export PYTHONPATH="$PWD:$SAM3_ROOT:${PYTHONPATH:-}"
-# Keep credentials in Hugging Face's default user location while placing the
-# large gated model download on netscratch.
 export HF_HUB_CACHE="${HF_HUB_CACHE:-/netscratch/espandar/huggingface_cache/hub}"
 export TORCH_HOME="${TORCH_HOME:-/netscratch/espandar/torch_cache}"
 export OMP_NUM_THREADS=2

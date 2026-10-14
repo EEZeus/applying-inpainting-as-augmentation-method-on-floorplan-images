@@ -2,12 +2,29 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-PALETTE = [(230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48),
-           (145, 30, 180), (70, 240, 240), (240, 50, 230), (210, 245, 60), (250, 190, 212),
-           (0, 128, 128), (220, 190, 255), (170, 110, 40), (255, 250, 200), (128, 0, 0),
-           (170, 255, 195), (128, 128, 0), (255, 215, 180), (0, 0, 128)]
+PALETTE = [
+    (230, 25, 75),
+    (60, 180, 75),
+    (255, 225, 25),
+    (0, 130, 200),
+    (245, 130, 48),
+    (145, 30, 180),
+    (70, 240, 240),
+    (240, 50, 230),
+    (210, 245, 60),
+    (250, 190, 212),
+    (0, 128, 128),
+    (220, 190, 255),
+    (170, 110, 40),
+    (255, 250, 200),
+    (128, 0, 0),
+    (170, 255, 195),
+    (128, 128, 0),
+    (255, 215, 180),
+    (0, 0, 128),
+]
 
 
 def draw_annotations(image, annotations, category_names, alpha=80):
@@ -28,10 +45,13 @@ def render_dataset_annotations(annotation_file, image_dir, output_dir, image_ids
     coco = json.loads(Path(annotation_file).read_text(encoding="utf-8"))
     allowed = None if image_ids is None else set(image_ids)
     anns = defaultdict(list)
-    for ann in coco["annotations"]: anns[ann["image_id"]].append(ann)
+    for ann in coco["annotations"]:
+        anns[ann["image_id"]].append(ann)
     names = {c["id"]: c["name"] for c in coco["categories"]}
-    output_dir = Path(output_dir); output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     for info in [im for im in coco["images"] if allowed is None or im["id"] in allowed][:limit]:
         image = Image.open(Path(image_dir) / info["file_name"])
-        draw_annotations(image, anns[info["id"]], names).save(output_dir / f"gt_{info['id']:03d}.jpg", quality=90)
-
+        draw_annotations(image, anns[info["id"]], names).save(
+            output_dir / f"gt_{info['id']:03d}.jpg", quality=90
+        )

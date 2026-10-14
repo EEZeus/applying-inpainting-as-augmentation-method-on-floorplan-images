@@ -7,13 +7,14 @@ tested once, so per-class test support pools to the full held-out set.
 
 Per (track, arm) it reports:
   - overall mask AP: mean / std / min / max over the K folds (K disjoint eval sets)
-  - per-class mask AP: support-weighted mean over folds  (weight = that fold's
+  - per-class mask AP: support-weighted mean over folds (weight = that fold's
     test_instances for the class), and pooled test_instances
   - rare-macro (11-16) and head-macro (1-10) from the pooled per-class table
   - paired comparison vs e0 over the K folds (Wilcoxon, exact sign-test fallback)
 
 Writes outputs/final/cv/summary.{json,csv}.
 """
+
 import argparse
 import csv
 import json
@@ -44,19 +45,29 @@ HEAD_IDS = set(range(1, 11))
 def _wilcoxon(arm_vals, base_vals):
     diffs = [a - b for a, b in zip(arm_vals, base_vals) if a is not None and b is not None]
     if not diffs or all(d == 0 for d in diffs):
-        return {"test": "none", "n_pairs": len(diffs),
-                "mean_delta": statistics.fmean(diffs) if diffs else None, "p_value": None}
+        return {
+            "test": "none",
+            "n_pairs": len(diffs),
+            "mean_delta": statistics.fmean(diffs) if diffs else None,
+            "p_value": None,
+        }
     res = {"n_pairs": len(diffs), "mean_delta": statistics.fmean(diffs)}
     try:
         from scipy.stats import wilcoxon
+
         stat, p = wilcoxon(diffs, alternative="two-sided", mode="auto")
         res.update({"test": "wilcoxon", "statistic": float(stat), "p_value": float(p)})
     except Exception:
         pos = sum(1 for d in diffs if d > 0)
         n = sum(1 for d in diffs if d != 0)
-        tail = sum(math.comb(n, k) for k in range(0, min(pos, n - pos) + 1)) / (2 ** n)
+        tail = sum(math.comb(n, k) for k in range(0, min(pos, n - pos) + 1)) / (2**n)
         res.update({"test": "sign", "n_positive": pos, "n_nonzero": n, "p_value": min(1.0, 2 * tail)})
     return res
+
+
+def _macro(pooled, ids):
+    vals = [pooled[c]["mask_AP"] for c in ids if c in pooled and pooled[c]["mask_AP"] is not None]
+    return statistics.fmean(vals) if vals else None
 
 
 def _fold_path(track, arm, k):
@@ -90,29 +101,33 @@ def main():
                     folds[k] = json.loads(p.read_text())
 
             overall = [folds[k]["test_metrics"]["mask"]["AP"] for k in sorted(folds)]
-            # pooled per-class: support-weighted mean AP over folds
+            # pooled per-class AP: support-weighted mean over folds
             per_class = {}
-            for k, payload in folds.items():
+            for payload in folds.values():
                 for r in payload.get("per_class", []):
                     cid = int(r["category_id"])
                     ap = r.get("mask_AP")
                     n = r.get("test_instances") or 0
-                    d = per_class.setdefault(cid, {"name": r.get("category_name"), "support": 0,
-                                                   "wsum": 0.0, "wn": 0})
+                    d = per_class.setdefault(
+                        cid, {"name": r.get("category_name"), "support": 0, "wsum": 0.0, "wn": 0}
+                    )
                     d["support"] += n
                     if ap is not None and n > 0:
                         d["wsum"] += ap * n
                         d["wn"] += n
-            pooled = {cid: {"name": d["name"], "support": d["support"],
-                            "mask_AP": (d["wsum"] / d["wn"]) if d["wn"] else None}
-                      for cid, d in per_class.items()}
-
-            def macro(ids):
-                vals = [pooled[c]["mask_AP"] for c in ids if c in pooled and pooled[c]["mask_AP"] is not None]
-                return statistics.fmean(vals) if vals else None
+            pooled = {
+                cid: {
+                    "name": d["name"],
+                    "support": d["support"],
+                    "mask_AP": (d["wsum"] / d["wn"]) if d["wn"] else None,
+                }
+                for cid, d in per_class.items()
+            }
 
             entry = {
-                "arm": arm, "track": track, "label": label,
+                "arm": arm,
+                "track": track,
+                "label": label,
                 "folds_done": sorted(folds),
                 "overall_mask_AP": {
                     "mean": statistics.fmean(overall) if overall else None,
@@ -124,21 +139,27 @@ def main():
                 "pooled_per_class": {str(c): pooled[c] for c in sorted(pooled)},
             }
             if track == "multiclass":
-                entry["rare_macro_mask_AP"] = macro(RARE_IDS)
-                entry["head_macro_mask_AP"] = macro(HEAD_IDS)
+                entry["rare_macro_mask_AP"] = _macro(pooled, RARE_IDS)
+                entry["head_macro_mask_AP"] = _macro(pooled, HEAD_IDS)
             if arm != BASELINE and base_overall:
                 shared = [k for k in sorted(folds) if k in base_overall]
                 entry["paired_vs_e0_overall"] = {
                     "folds": shared,
-                    **_wilcoxon([folds[k]["test_metrics"]["mask"]["AP"] for k in shared],
-                                [base_overall[k] for k in shared]),
+                    **_wilcoxon(
+                        [folds[k]["test_metrics"]["mask"]["AP"] for k in shared],
+                        [base_overall[k] for k in shared],
+                    ),
                 }
             report["arms"].append(entry)
 
-            row = {"track": track, "arm": arm, "label": label,
-                   "folds_done": ";".join(map(str, sorted(folds))),
-                   "overall_AP_mean": entry["overall_mask_AP"]["mean"],
-                   "overall_AP_std": entry["overall_mask_AP"]["std"]}
+            row = {
+                "track": track,
+                "arm": arm,
+                "label": label,
+                "folds_done": ";".join(map(str, sorted(folds))),
+                "overall_AP_mean": entry["overall_mask_AP"]["mean"],
+                "overall_AP_std": entry["overall_mask_AP"]["std"],
+            }
             if track == "multiclass":
                 row["rare_macro_AP"] = entry.get("rare_macro_mask_AP")
                 row["head_macro_AP"] = entry.get("head_macro_mask_AP")
@@ -157,10 +178,10 @@ def main():
 
     done = sum(len(a["folds_done"]) for a in report["arms"])
     total = len(report["arms"]) * args.folds
-    print("cv analysis: %d/%d (arm x fold) evals found across %s" % (done, total, args.tracks))
+    print(f"cv analysis: {done}/{total} (arm x fold) evals found across {args.tracks}")
     print(json.dumps(report, indent=2))
     if done < total:
-        print("WARNING: %d evals missing" % (total - done), file=sys.stderr)
+        print(f"WARNING: {total - done} evals missing", file=sys.stderr)
 
 
 if __name__ == "__main__":

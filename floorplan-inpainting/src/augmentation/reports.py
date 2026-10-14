@@ -12,12 +12,9 @@ def class_count_report(path, original_train, datasets):
         annotations.sort(key=lambda item: item["id"])
 
     def target_annotation_ids(coco, images):
-        """Locate the one deliberately changed annotation in each synthetic image.
+        """Return the IDs of the one changed annotation in each synthetic image.
 
-        Full-plan annotations are copied in source annotation order and assigned a
-        new contiguous ID range. Crop annotations retain ``source_annotation_id``.
-        Using those provenance fields avoids counting unchanged room annotations
-        carried along as context as synthetic target instances.
+        Full-plan copies keep the source annotation order; crops keep ``source_annotation_id``.
         """
         by_image = {}
         for annotation in coco["annotations"]:
@@ -29,8 +26,11 @@ def class_count_report(path, original_train, datasets):
                 continue
             target_id = info.get("target_annotation_id")
             crop_match = next(
-                (annotation for annotation in annotations
-                 if annotation.get("source_annotation_id") == target_id),
+                (
+                    annotation
+                    for annotation in annotations
+                    if annotation.get("source_annotation_id") == target_id
+                ),
                 None,
             )
             if crop_match is not None:
@@ -39,14 +39,11 @@ def class_count_report(path, original_train, datasets):
 
             originals = source_annotations.get(info.get("source_image_id"), [])
             target_positions = [
-                index for index, annotation in enumerate(originals)
-                if annotation["id"] == target_id
+                index for index, annotation in enumerate(originals) if annotation["id"] == target_id
             ]
             ordered = sorted(annotations, key=lambda item: item["id"])
             if len(target_positions) != 1 or len(ordered) != len(originals):
-                raise ValueError(
-                    f"Cannot resolve target annotation provenance for image {image_id}"
-                )
+                raise ValueError(f"Cannot resolve target annotation provenance for image {image_id}")
             targets.add(ordered[target_positions[0]]["id"])
         return targets
 
@@ -71,12 +68,21 @@ def class_count_report(path, original_train, datasets):
                 b_instances[ann["category_id"]] += 1
         for category in coco["categories"]:
             cid = category["id"]
-            rows.append({"dataset": dataset_name, "category_id": cid, "class": category["name"],
-                         "real_instances": real[cid],
-                         "synthetic_a_appearance_occurrences": a_occurrences[cid],
-                         "new_synthetic_b_room_instances": b_instances[cid],
-                         "effective_training_occurrences": total[cid],
-                         "other_context_occurrences": total[cid] - unchanged_base[cid] - a_occurrences[cid] - b_instances[cid]})
+            rows.append(
+                {
+                    "dataset": dataset_name,
+                    "category_id": cid,
+                    "class": category["name"],
+                    "real_instances": real[cid],
+                    "synthetic_a_appearance_occurrences": a_occurrences[cid],
+                    "new_synthetic_b_room_instances": b_instances[cid],
+                    "effective_training_occurrences": total[cid],
+                    "other_context_occurrences": total[cid]
+                    - unchanged_base[cid]
+                    - a_occurrences[cid]
+                    - b_instances[cid],
+                }
+            )
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:

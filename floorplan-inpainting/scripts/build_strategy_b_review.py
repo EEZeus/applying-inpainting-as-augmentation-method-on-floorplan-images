@@ -2,6 +2,7 @@
 import argparse
 import sys
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from src.augmentation.review import build_review
@@ -13,4 +14,5 @@ if __name__ == "__main__":
     parser.add_argument("--review", default="outputs/augmentation_b/review.csv")
     args = parser.parse_args()
     rows = build_review(resolve_path(args.dataset_dir), resolve_path(args.review))
-    print(f"Audit contains {len(rows)} automatic decisions; {sum(r['status'] == 'approved' for r in rows)} approved")
+    approved = sum(r["status"] == "approved" for r in rows)
+    print(f"Audit contains {len(rows)} automatic decisions; {approved} approved")

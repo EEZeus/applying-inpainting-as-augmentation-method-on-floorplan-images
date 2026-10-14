@@ -10,12 +10,16 @@ from PIL import Image
 from src.augmentation.backends import InpaintingBackend
 from src.augmentation.crops import CropTransform, composite_masked
 from src.augmentation.masks import build_safe_mask, relative_erosion_pixels
-from src.augmentation.pipeline import (run_augmentation, read_metadata, plan_candidates,
-                                       validate_augmented_coco, _append_jsonl)
+from src.augmentation.pipeline import (
+    _append_jsonl,
+    read_metadata,
+    run_augmentation,
+    validate_augmented_coco,
+)
 from src.augmentation.quality import evaluate_quality
 from src.augmentation.rare_crops import build_rare_crops, clip_annotation
-from src.augmentation.rare_sampling import sampling_weights, make_sampler
-from src.augmentation.review import build_review, apply_review
+from src.augmentation.rare_sampling import make_sampler, sampling_weights
+from src.augmentation.review import apply_review, build_review
 from src.augmentation.strategy_b import plan_strategy_b, run_strategy_b
 from src.augmentation.strategy_c import plan_strategy_c, run_strategy_c
 from src.augmentation.validation import validate_full_provenance
@@ -26,9 +30,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def annotation(aid, image=1, category=12, bbox=(20, 20, 60, 60)):
     x, y, w, h = bbox
-    return {"id": aid, "image_id": image, "category_id": category, "bbox": list(bbox),
-            "area": w * h, "iscrowd": 0,
-            "segmentation": [[x, y, x+w, y, x+w, y+h, x, y+h]], "custom_field": "preserve"}
+    return {
+        "id": aid,
+        "image_id": image,
+        "category_id": category,
+        "bbox": list(bbox),
+        "area": w * h,
+        "iscrowd": 0,
+        "segmentation": [[x, y, x + w, y, x + w, y + h, x, y + h]],
+        "custom_field": "preserve",
+    }
 
 
 @pytest.fixture
@@ -45,11 +56,18 @@ def fixture_data(tmp_path):
     images.mkdir()
     Image.fromarray(image).save(images / "train.png")
     # Deliberately absent validation image: generation must never open it.
-    coco = {"images": [
-        {"id": 1, "file_name": "train.png", "width": 120, "height": 100},
-        {"id": 2, "file_name": "MUST_NOT_READ.png", "width": 120, "height": 100},
-    ], "annotations": [annotation(10), annotation(11, category=1, bbox=(70, 10, 40, 70)), annotation(12, image=2)],
-       "categories": [{"id": i, "name": str(i)} for i in range(1, 20)]}
+    coco = {
+        "images": [
+            {"id": 1, "file_name": "train.png", "width": 120, "height": 100},
+            {"id": 2, "file_name": "MUST_NOT_READ.png", "width": 120, "height": 100},
+        ],
+        "annotations": [
+            annotation(10),
+            annotation(11, category=1, bbox=(70, 10, 40, 70)),
+            annotation(12, image=2),
+        ],
+        "categories": [{"id": i, "name": str(i)} for i in range(1, 20)],
+    }
     return config, coco, rare, images, tmp_path / "output", tmp_path / "qa"
 
 
@@ -66,7 +84,7 @@ class FakeBackend(InpaintingBackend):
         self.calls.append((prompt, seed))
         if self.fail:
             raise RuntimeError("temporary failure")
-        # Adversarially change the WHOLE crop, including every protected pixel.
+        # Adversarially change the whole crop, including every protected pixel.
         y, x = np.indices((image.height, image.width))
         values = (195 + (x + y) % 40).astype(np.uint8)
         return Image.fromarray(np.repeat(values[..., None], 3, axis=2))
@@ -78,8 +96,12 @@ def test_relative_erosion_and_mask_protection():
     assert relative_erosion_pixels([0, 0, 1000, 2000]) == 12
     image = np.full((100, 120, 3), 255, np.uint8)
     image[40:43, 30:65] = 0
-    result = build_safe_mask(image, annotation(1), [annotation(2, bbox=(60, 0, 40, 90))],
-                             {"dark_threshold": "auto", "structure_dilation_px": 2})
+    result = build_safe_mask(
+        image,
+        annotation(1),
+        [annotation(2, bbox=(60, 0, 40, 90))],
+        {"dark_threshold": "auto", "structure_dilation_px": 2},
+    )
     assert np.all(~result.safe_mask | result.room_mask)
     assert not result.safe_mask[result.structure_mask].any()
     assert not result.safe_mask[result.neighbor_mask].any()
@@ -91,10 +113,10 @@ def test_relative_erosion_and_mask_protection():
 @pytest.mark.parametrize("bbox", [[0, 0, 30, 50], [80, 0, 40, 50], [0, 60, 30, 40], [80, 60, 40, 40]])
 def test_crop_padding_inverse_and_exact_composite(bbox, tmp_path):
     original = np.random.default_rng(4).integers(0, 256, (100, 120, 3), dtype=np.uint8)
-    transform = CropTransform.from_bbox(bbox, 120, 100, 1., 128)
+    transform = CropTransform.from_bbox(bbox, 120, 100, 1.0, 128)
     mask = np.zeros((100, 120), bool)
     x, y, w, h = bbox
-    mask[y:y+h, x:x+w] = True
+    mask[y : y + h, x : x + w] = True
     model_mask = transform.forward_mask(mask)
     assert model_mask.dtype == bool
     assert set(np.unique(model_mask)) <= {False, True}
@@ -141,10 +163,13 @@ def test_a_end_to_end_resume_annotations_and_png(fixture_data):
     assert validate_full_provenance(data, coco, images, output, {1})["verified_synthetic_images"] == 2
     for im in data["images"]:
         if im.get("synthetic"):
-            anns = sorted([a for a in data["annotations"] if a["image_id"] == im["id"]], key=lambda a: a["id"])
+            anns = sorted(
+                [a for a in data["annotations"] if a["image_id"] == im["id"]], key=lambda a: a["id"]
+            )
             for source, duplicate in zip(coco["annotations"][:2], anns):
                 assert {k: v for k, v in source.items() if k not in {"id", "image_id"}} == {
-                    k: v for k, v in duplicate.items() if k not in {"id", "image_id"}}
+                    k: v for k, v in duplicate.items() if k not in {"id", "image_id"}
+                }
     assert coco == baseline
     changed = copy.deepcopy(config)
     changed["prompt"]["template"] = "changed {category_name}"
@@ -159,7 +184,9 @@ def test_retry_error_and_missing_output(fixture_data):
     result = run_augmentation(config, coco, rare, {1}, images, output, qa, backend=backend, limit=1)
     assert result["errors"] == 1
     backend.fail = False
-    result = run_augmentation(config, coco, rare, {1}, images, output, qa, backend=backend, limit=1, retry_errors=True)
+    result = run_augmentation(
+        config, coco, rare, {1}, images, output, qa, backend=backend, limit=1, retry_errors=True
+    )
     assert result["accepted"] == 1
     records = read_metadata(output / "metadata.jsonl")
     assert records[0]["synthetic_image_id"] == records[1]["synthetic_image_id"]
@@ -182,7 +209,7 @@ def test_clipped_crops_and_target_coverage(fixture_data):
     assert len(crops["images"]) == 1 and len(crops["annotations"]) == 2
     target = crops["annotations"][0]
     assert target["category_id"] == 12
-    assert target["area"] == pytest.approx(3600 * (128/120)**2)
+    assert target["area"] == pytest.approx(3600 * (128 / 120) ** 2)
     for ann in crops["annotations"]:
         assert ann["area"] > 0
         assert all(0 <= coord <= 128 for p in ann["segmentation"] for coord in p)
@@ -194,9 +221,9 @@ def test_clipped_crops_and_target_coverage(fixture_data):
 def test_bounded_weighted_sampler(fixture_data):
     _, coco, _, _, _, _ = fixture_data
     train = {**coco, "images": coco["images"][:1], "annotations": coco["annotations"][:2]}
-    weights, rows = sampling_weights(coco, train, {12}, {"lambda": 2., "max_image_weight": 5.})
+    weights, rows = sampling_weights(coco, train, {12}, {"lambda": 2.0, "max_image_weight": 5.0})
     assert np.isfinite(weights).all() and (weights >= 1).all() and (weights <= 5).all()
-    assert max(r["probability"] for r in rows) <= 5/(len(weights)-1+5)
+    assert max(r["probability"] for r in rows) <= 5 / (len(weights) - 1 + 5)
     assert list(make_sampler(weights, 42)) == list(make_sampler(weights, 42))
     with pytest.raises(ValueError):
         sampling_weights(coco, train, {12}, {"lambda": float("nan")})
@@ -208,7 +235,7 @@ def test_b_automatic_acceptance_and_only_target_category_changes(fixture_data):
     config["classes"]["target_ids"] = [12]
     config["crop"]["output_size"] = 128
     config["runtime"]["num_workers"] = 0
-    config["geometry"]["tolerance"] = .9
+    config["geometry"]["tolerance"] = 0.9
     plan, diagnostic = plan_strategy_b(coco, {1}, config)
     assert len(plan[0]) == 1 and plan[0][0].target_annotation_id == 11
     result = run_strategy_b(config, coco, rare, {1}, images, output, qa, backend=FakeBackend())
@@ -270,6 +297,7 @@ def test_source_pixel_change_invalidates_resume(fixture_data):
 
 def test_split_authority_rejects_validation_path():
     from src.augmentation.inputs import load_inputs
+
     config = load_yaml(ROOT / "configs/augmentation_a.yaml")
     config["dataset"]["train_split"] = "data/splits/val.txt"
     with pytest.raises(ValueError, match="frozen training split"):
@@ -288,6 +316,7 @@ def test_safety_checker_flag_is_terminal_rejection(fixture_data):
         def generate(self, *args, **kwargs):
             self.calls.append(1)
             raise ValueError("safety_checker_flagged")
+
     config, coco, rare, images, output, qa = fixture_data
     backend = Flagged()
     result = run_augmentation(config, coco, rare, {1}, images, output, qa, backend=backend, limit=1)
@@ -302,7 +331,7 @@ def test_b_audit_never_waits_for_human_input(fixture_data):
     config["classes"]["target_ids"] = [12]
     config["crop"]["output_size"] = 128
     config["runtime"]["num_workers"] = 0
-    config["geometry"]["tolerance"] = .9
+    config["geometry"]["tolerance"] = 0.9
     run_strategy_b(config, coco, rare, {1}, images, output, qa, backend=FakeBackend())
     audit = qa / "review.csv"
     audit.write_text("an obsolete or incomplete human review sheet")
@@ -319,7 +348,7 @@ def test_c_exemplar_modes_preserve_provenance_and_only_relabel_target(fixture_da
     config["classes"]["source_ids"] = [1]
     config["classes"]["target_ids"] = [12]
     config["crop"]["output_size"] = 128
-    config["geometry"]["tolerance"] = .9
+    config["geometry"]["tolerance"] = 0.9
     config["runtime"]["num_workers"] = 0
     config["semantic_quality"]["min_donor_dark_pixels"] = 1
     plan, diagnostics = plan_strategy_c(coco, {1}, config, mode)
@@ -330,25 +359,27 @@ def test_c_exemplar_modes_preserve_provenance_and_only_relabel_target(fixture_da
     assert diagnostics["12"]["real_donors"] == 1
 
     backend = FakeBackend()
-    result = run_strategy_c(config, coco, rare, {1}, images, output / mode, qa / mode,
-                            mode, backend=backend)
+    result = run_strategy_c(config, coco, rare, {1}, images, output / mode, qa / mode, mode, backend=backend)
     assert result["accepted"] == 1 and result["semantic_correctness"] == "real_train_exemplar_preserved"
     assert len(backend.calls) == (1 if mode == "diffusion_inpaint" else 0)
     generated = json.loads((output / mode / "instances_train_aug_c.json").read_text())
     validate_augmented_coco(generated, output / mode, {1})
-    assert validate_full_provenance(generated, coco, images, output / mode, {1})[
-        "verified_synthetic_images"] == 1
+    assert (
+        validate_full_provenance(generated, coco, images, output / mode, {1})["verified_synthetic_images"]
+        == 1
+    )
     synthetic_image = next(image for image in generated["images"] if image.get("synthetic"))
     assert synthetic_image["strategy"] == "c"
     assert synthetic_image["donor_annotation_id"] == 10
-    synthetic = sorted((a for a in generated["annotations"]
-                        if a["image_id"] == synthetic_image["id"]), key=lambda a: a["id"])
+    synthetic = sorted(
+        (a for a in generated["annotations"] if a["image_id"] == synthetic_image["id"]), key=lambda a: a["id"]
+    )
     for original, duplicate in zip(coco["annotations"][:2], synthetic):
         assert duplicate["segmentation"] == original["segmentation"]
         assert duplicate["bbox"] == original["bbox"]
         assert duplicate["category_id"] == (12 if original["id"] == 11 else original["category_id"])
     record = read_metadata(output / mode / "metadata.jsonl")[-1]
-    assert record["donor_dark_retention_fraction"] >= .95
+    assert record["donor_dark_retention_fraction"] >= 0.95
     assert record["outside_change_ratio"] == record["protected_boundary_change_ratio"] == 0
 
 

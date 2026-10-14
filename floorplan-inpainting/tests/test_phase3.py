@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.experiments.data import (build_epoch_sampler, build_training_dataset,
-                                  original_train_counts)
+from src.experiments.data import build_epoch_sampler, build_training_dataset, original_train_counts
 from src.experiments.train import _validate_experiment
 from src.utils.config import load_yaml
 
@@ -50,8 +49,9 @@ def test_phase3_sources_are_train_only_and_agnostic_keeps_provenance():
     synthetic_index = next(i for i, info in enumerate(crop_dataset.images) if info.get("synthetic"))
     _, target = crop_dataset[synthetic_index]
     assert set(target["labels"].tolist()) == {1}
-    assert any(item["source"] == "synthetic_A" and 11 <= item["category_id"] <= 16
-               for item in target["_exposure"])
+    assert any(
+        item["source"] == "synthetic_A" and 11 <= item["category_id"] <= 16 for item in target["_exposure"]
+    )
 
 
 @requires_phase3_artifacts
@@ -77,9 +77,12 @@ def test_strategy_b_training_uses_only_automatically_accepted_outputs():
 
 
 def test_strategy_c_experiment_configs_are_valid_and_isolated():
-    loaded = [load_yaml(path) for path in sorted(
-        (ROOT / "configs/experiments_c").glob("*.yaml"),
-        key=lambda path: int(path.name.split("_")[0][1:]))]
+    loaded = [
+        load_yaml(path)
+        for path in sorted(
+            (ROOT / "configs/experiments_c").glob("*.yaml"), key=lambda path: int(path.name.split("_")[0][1:])
+        )
+    ]
     assert [item["id"] for item in loaded] == ["e8", "e9", "e10", "e11"]
     for item in loaded:
         _validate_experiment(item)

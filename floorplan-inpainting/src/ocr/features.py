@@ -1,11 +1,11 @@
 """Per-token text features and the OCR provider used by datasets and models.
 
-Feature of one label token (fixed a priori, not tuned on held-out plans):
+Feature of one label token:
   [ multilingual-e5-small embedding (384) | hashed char trigrams (256) |
     cosine similarity of the e5 embedding to each class name (n_classes) ]
-The class-name similarity is a zero-shot prior; class names are label
-metadata, not annotations, so using them is not leakage.
+The class-name similarity acts as a zero-shot prior.
 """
+
 import json
 from pathlib import Path
 
@@ -33,9 +33,10 @@ class E5Encoder:
         outputs = []
         with torch.inference_mode():
             for start in range(0, len(texts), batch_size):
-                batch = [f"query: {t}" for t in texts[start:start + batch_size]]
-                encoded = self.tokenizer(batch, padding=True, truncation=True, max_length=32,
-                                         return_tensors="pt").to(self.device)
+                batch = [f"query: {t}" for t in texts[start : start + batch_size]]
+                encoded = self.tokenizer(
+                    batch, padding=True, truncation=True, max_length=32, return_tensors="pt"
+                ).to(self.device)
                 hidden = self.model(**encoded).last_hidden_state
                 mask = encoded["attention_mask"].unsqueeze(-1).to(hidden.dtype)
                 pooled = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1)
@@ -53,9 +54,13 @@ def build_text_features(texts, class_names, encoder):
     similarity = text_emb @ name_emb.T
     features = np.concatenate([text_emb, hashed, similarity], axis=1).astype(np.float32)
     e5_dim, n_classes = text_emb.shape[1], len(class_names)
-    layout = {"e5": [0, e5_dim], "hash": [e5_dim, e5_dim + HASH_DIM],
-              "class_sim": [e5_dim + HASH_DIM, e5_dim + HASH_DIM + n_classes],
-              "class_names": list(class_names), "encoder": encoder.model_name}
+    layout = {
+        "e5": [0, e5_dim],
+        "hash": [e5_dim, e5_dim + HASH_DIM],
+        "class_sim": [e5_dim + HASH_DIM, e5_dim + HASH_DIM + n_classes],
+        "class_names": list(class_names),
+        "encoder": encoder.model_name,
+    }
     return features, layout
 
 
@@ -72,8 +77,9 @@ def label_texts(cache):
 def save_features(path, texts, features, layout):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(path, texts=np.asarray(texts, dtype=object), features=features,
-             layout=np.asarray(json.dumps(layout)))
+    np.savez(
+        path, texts=np.asarray(texts, dtype=object), features=features, layout=np.asarray(json.dumps(layout))
+    )
 
 
 def load_features(path):
@@ -129,15 +135,22 @@ class OcrProvider:
             feats.append(self.lookup[key])
             conf.append(float(token["conf"]))
         if not boxes:
-            return (np.zeros((0, 4), np.float32), np.zeros((0, self.dim), np.float32),
-                    np.zeros(0, np.float32))
-        return (np.clip(np.stack(boxes), 0.0, 1.0).astype(np.float32),
-                np.stack(feats).astype(np.float32), np.asarray(conf, dtype=np.float32))
+            return (
+                np.zeros((0, 4), np.float32),
+                np.zeros((0, self.dim), np.float32),
+                np.zeros(0, np.float32),
+            )
+        return (
+            np.clip(np.stack(boxes), 0.0, 1.0).astype(np.float32),
+            np.stack(feats).astype(np.float32),
+            np.asarray(conf, dtype=np.float32),
+        )
 
     def raw_tokens(self, file_name):
         return self.images[Path(file_name).name]["tokens"]
 
 
 def provider_from_config(ocr_cfg, root_resolver):
-    return OcrProvider([root_resolver(p) for p in ocr_cfg["caches"]],
-                       [root_resolver(p) for p in ocr_cfg["features"]])
+    return OcrProvider(
+        [root_resolver(p) for p in ocr_cfg["caches"]], [root_resolver(p) for p in ocr_cfg["features"]]
+    )

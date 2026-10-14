@@ -4,6 +4,7 @@
     python scripts/ocr_embed.py --cache data/ocr/original_tokens.json \
         --out data/ocr/original_features.npz
 """
+
 import argparse
 import json
 import sys
@@ -12,8 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.ocr.features import E5Encoder, E5_MODEL, build_text_features, label_texts, save_features  # noqa: E402
-from src.utils.config import resolve_path  # noqa: E402
+from src.ocr.features import E5_MODEL, E5Encoder, build_text_features, label_texts, save_features
+from src.utils.config import resolve_path
 
 
 def main():

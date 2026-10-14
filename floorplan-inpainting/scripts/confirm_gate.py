@@ -10,6 +10,7 @@ Gates can only cancel work; they never add arms or change the analysis.
       passed the generation-only rule and >= min_pairs matched pairs exist.
   e0: runs if any other arm runs.
 """
+
 import argparse
 import json
 import statistics
@@ -56,16 +57,28 @@ def main():
     manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {"status": "missing"}
     matched_ok = manifest.get("status") == "built"
     decisions["e16"] = decisions["e17"] = matched_ok
-    notes["e16"] = notes["e17"] = (f"matched datasets {manifest.get('status')}; "
-                                   f"pairs={len(manifest.get('pairs', []))}, "
-                                   f"strength={manifest.get('chosen_strength')}")
+    notes["e16"] = notes["e17"] = (
+        f"matched datasets {manifest.get('status')}; "
+        f"pairs={len(manifest.get('pairs', []))}, "
+        f"strength={manifest.get('chosen_strength')}"
+    )
     decisions["e0"] = any(decisions.values())
-    notes["e0"] = "baseline runs because at least one comparison arm runs" if decisions["e0"] else "no comparison arm left"
+    notes["e0"] = (
+        "baseline runs because at least one comparison arm runs"
+        if decisions["e0"]
+        else "no comparison arm left"
+    )
     if args.force_all:
         decisions = {arm: True for arm in ("e0", "e8", "e16", "e17")}
         notes["forced"] = "smoke test: all arms forced on"
-    result = {"run": decisions, "notes": notes, "futility_mean_delta": futility,
-              "rescore_e0": e0, "rescore_e8": e8, "matched_status": manifest.get("status")}
+    result = {
+        "run": decisions,
+        "notes": notes,
+        "futility_mean_delta": futility,
+        "rescore_e0": e0,
+        "rescore_e8": e8,
+        "matched_status": manifest.get("status"),
+    }
     out = resolve_path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2), encoding="utf-8")

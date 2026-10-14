@@ -1,13 +1,6 @@
 #!/bin/bash
-# Submit the confirm chain (see docs/preregistration_confirm.md).
-#
-#   rescore (84 evals) ─┐
-#                       ├─afterok─> gate ─afterok─> train (48 runs) ─afterany─> analyze + report
-#   generate (C2-wide) ─┘
-#
-# Usage, from the project directory on the cluster:
-#   bash scripts/submit_confirm.sh smoke   # tiny end-to-end run into *_smoke dirs
-#   bash scripts/submit_confirm.sh full    # the pre-registered study
+# Confirm chain (docs/preregistration_confirm.md): rescore + generate -> gate -> train -> analyze.
+#   bash scripts/submit_confirm.sh smoke|full
 set -euo pipefail
 MODE=${1:?usage: submit_confirm.sh smoke|full}
 HERE=$(cd "$(dirname "$0")/.." && pwd)

@@ -5,8 +5,9 @@ Both are composed by the existing multi-room builder from the intersection of
 (target, donor) pairs accepted in BOTH candidate directories, with the same
 config seed, the same replacement policy and a canonical pool order. The two
 datasets therefore contain the same synthetic plans, converting the same rooms
-with the same donors; only the integrated pixels differ. This is asserted.
+with the same donors; only the integrated pixels differ (checked before writing).
 """
+
 import argparse
 import json
 import sys
@@ -47,10 +48,15 @@ def main():
     copy_dir = resolve_path(args.copy_paste_dir)
     copy_pairs, wide_pairs = accepted_pairs(copy_dir), accepted_pairs(wide_dir)
     pairs = sorted(copy_pairs & wide_pairs)
-    manifest = {"copy_paste_dir": str(copy_dir), "inpaint_wide_dir": str(wide_dir),
-                "chosen_strength": selection["chosen_strength"],
-                "accepted_copy_paste": len(copy_pairs), "accepted_inpaint_wide": len(wide_pairs),
-                "pairs": [list(p) for p in pairs], "min_pairs": args.min_pairs}
+    manifest = {
+        "copy_paste_dir": str(copy_dir),
+        "inpaint_wide_dir": str(wide_dir),
+        "chosen_strength": selection["chosen_strength"],
+        "accepted_copy_paste": len(copy_pairs),
+        "accepted_inpaint_wide": len(wide_pairs),
+        "pairs": [list(p) for p in pairs],
+        "min_pairs": args.min_pairs,
+    }
     if len(pairs) < args.min_pairs:
         manifest["status"] = "insufficient_pairs"
         manifest_path.write_text(json.dumps(manifest, indent=2))
@@ -59,19 +65,36 @@ def main():
     config = load_yaml(args.config)
     coco, _, train_ids, image_dir = load_inputs(config)
     built = {}
-    for name, candidate_dir, prefix in (("copy_paste_multi", copy_dir, "c-matched-copy-paste"),
-                                        ("inpaint_wide_multi", wide_dir, "c-matched-inpaint-wide")):
+    for name, candidate_dir, prefix in (
+        ("copy_paste_multi", copy_dir, "c-matched-copy-paste"),
+        ("inpaint_wide_multi", wide_dir, "c-matched-inpaint-wide"),
+    ):
         built[name] = build_multiroom_dataset(
-            config, coco, train_ids, image_dir, candidate_dir, out_root / name,
-            strategy="c_multi", sample_prefix=prefix, allowed_pairs=pairs, canonical_order=True)
-    signature = lambda m: [(g["source_image_id"], g["pair_keys"], g["replacement_count"]) for g in m["groups"]]
+            config,
+            coco,
+            train_ids,
+            image_dir,
+            candidate_dir,
+            out_root / name,
+            strategy="c_multi",
+            sample_prefix=prefix,
+            allowed_pairs=pairs,
+            canonical_order=True,
+        )
+
+    def signature(m):
+        return [(g["source_image_id"], g["pair_keys"], g["replacement_count"]) for g in m["groups"]]
+
     if signature(built["copy_paste_multi"]) != signature(built["inpaint_wide_multi"]):
         raise ValueError("Matched datasets differ in composition; they must differ only in pixels")
-    manifest.update(status="built", synthetic_plans=built["copy_paste_multi"]["synthetic_plans"],
-                    converted_rooms=sum(g["replacement_count"] for g in built["copy_paste_multi"]["groups"]),
-                    plans_with_variants=len({g["source_image_id"] for g in built["copy_paste_multi"]["groups"]}),
-                    replacement_fraction=built["copy_paste_multi"]["replacement_fraction"],
-                    fraction_jitter=built["copy_paste_multi"]["fraction_jitter"])
+    manifest.update(
+        status="built",
+        synthetic_plans=built["copy_paste_multi"]["synthetic_plans"],
+        converted_rooms=sum(g["replacement_count"] for g in built["copy_paste_multi"]["groups"]),
+        plans_with_variants=len({g["source_image_id"] for g in built["copy_paste_multi"]["groups"]}),
+        replacement_fraction=built["copy_paste_multi"]["replacement_fraction"],
+        fraction_jitter=built["copy_paste_multi"]["fraction_jitter"],
+    )
     manifest_path.write_text(json.dumps(manifest, indent=2))
     print(json.dumps({k: v for k, v in manifest.items() if k != "pairs"}, indent=2))
 

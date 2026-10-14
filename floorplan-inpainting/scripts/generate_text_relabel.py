@@ -7,6 +7,7 @@ room crop for the OCR verification pass. Resumable by sample id.
 
     python scripts/generate_text_relabel.py --config configs/augmentation_text.yaml [--limit 4]
 """
+
 import argparse
 import json
 import sys
@@ -20,11 +21,11 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.augmentation.pipeline import _append_jsonl, _atomic_json, latest_metadata, read_metadata  # noqa: E402
-from src.augmentation.strategy_b import plan_strategy_b  # noqa: E402
-from src.augmentation.text_relabel import convert_room, make_patch, rare_vocabulary, sample_word  # noqa: E402
-from src.data.coco_dataset import read_split  # noqa: E402
-from src.utils.config import load_yaml, resolve_path  # noqa: E402
+from src.augmentation.pipeline import _append_jsonl, _atomic_json, latest_metadata, read_metadata
+from src.augmentation.strategy_b import plan_strategy_b
+from src.augmentation.text_relabel import convert_room, make_patch, rare_vocabulary, sample_word
+from src.data.coco_dataset import read_split
+from src.utils.config import load_yaml, resolve_path
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -55,11 +56,23 @@ def main():
     targets = [int(c) for c in config["classes"]["target_ids"]]
     vocab = rare_vocabulary(coco, train_ids, tokens_by_name, targets, file_names)
     (plan, _), diagnostics = plan_strategy_b(coco, train_ids, config)
-    plan = plan[:args.limit] if args.limit else plan
-    _atomic_json(out / "plan.json", {
-        "diagnostics": diagnostics, "vocabulary": {str(k): dict(v) for k, v in vocab.items()},
-        "rooms": [{"annotation_id": c.target_annotation_id, "source_image_id": c.source_image_id,
-                   "target_category_id": c.category_id, "seed": c.seed} for c in plan]})
+    plan = plan[: args.limit] if args.limit else plan
+    _atomic_json(
+        out / "plan.json",
+        {
+            "diagnostics": diagnostics,
+            "vocabulary": {str(k): dict(v) for k, v in vocab.items()},
+            "rooms": [
+                {
+                    "annotation_id": c.target_annotation_id,
+                    "source_image_id": c.source_image_id,
+                    "target_category_id": c.category_id,
+                    "seed": c.seed,
+                }
+                for c in plan
+            ],
+        },
+    )
 
     records_path = out / "records.jsonl"
     done = latest_metadata(read_metadata(records_path))
@@ -72,6 +85,7 @@ def main():
     backend = None
     if config["edit"].get("eraser", "diffusion") == "diffusion":
         from src.augmentation.backends import StableDiffusionInpaintingBackend
+
         backend = StableDiffusionInpaintingBackend(config["generation"])
     image_cache = {}
     variants = int(config["variants_per_room"])
@@ -93,12 +107,26 @@ def main():
             target = by_id[candidate.target_annotation_id]
             others = [a for a in annotations[image_id] if a["id"] != target["id"]]
             started = time.time()
-            record = {"sample_id": sample_id, "source_image_id": image_id, "variant": variant,
-                      "annotation_id": target["id"], "source_category_id": int(target["category_id"]),
-                      "target_category_id": candidate.category_id, "seed": seed}
+            record = {
+                "sample_id": sample_id,
+                "source_image_id": image_id,
+                "variant": variant,
+                "annotation_id": target["id"],
+                "source_category_id": int(target["category_id"]),
+                "target_category_id": candidate.category_id,
+                "seed": seed,
+            }
             try:
-                result = convert_room(image, target, others, tokens_by_name[file_names[image_id]], word,
-                                      config["edit"], seed, backend)
+                result = convert_room(
+                    image,
+                    target,
+                    others,
+                    tokens_by_name[file_names[image_id]],
+                    word,
+                    config["edit"],
+                    seed,
+                    backend,
+                )
             except Exception as error:  # recorded and retried with --retry-errors
                 _append_jsonl(records_path, {**record, "status": "error", "reason": repr(error)})
                 print(f"{sample_id}: error {error!r}", flush=True)
@@ -117,8 +145,11 @@ def main():
             record.update(result)
             record["seconds"] = time.time() - started
             _append_jsonl(records_path, record)
-            print(f"{sample_id}: {record['status']} {record.get('reason', '')} word={word!r} "
-                  f"old={record.get('old_texts')} eraser={record.get('eraser')}", flush=True)
+            print(
+                f"{sample_id}: {record['status']} {record.get('reason', '')} word={word!r} "
+                f"old={record.get('old_texts')} eraser={record.get('eraser')}",
+                flush=True,
+            )
     final = latest_metadata(read_metadata(records_path))
     counts = defaultdict(int)
     for item in final.values():

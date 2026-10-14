@@ -1,11 +1,6 @@
 #!/bin/bash
-# Experiment 3 (DINOv2 two-stage) chain. Run from the cluster checkout:
-#   cd /netscratch/espandar/inpainting/floorplan-inpainting && bash scripts/submit_dino.sh
-#
-#   pre-cache : download dinov2-base weights + processor on the login node
-#   smoke     : limited extraction (30 crops) -> catches offline/API/path errors
-#   extract   : full feature extraction (5 npz sets), afterok:smoke
-#   analyze   : train heads + evaluate + write report, afterany:extract
+# DINOv2 two-stage chain: cache dinov2-base on the login node -> smoke extraction -> full
+# extraction -> analyze.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "${HERE}"

@@ -1,11 +1,6 @@
 #!/bin/bash
-# SAM 3 trained on the best augmentation strategies, both label tracks.
-# 3 strategies x {multiclass, agnostic} = 6 tasks. Each: build the SAM3 dataset
-# (augmented train + frozen real val/test) -> train 20 epochs -> test.
-# The SAM3 baselines peaked at ~33 GB torch.cuda.max_memory_allocated in
-# training on A100-80GB; with caching-allocator reservation/fragmentation the
-# real footprint is ~40-45 GB, and the augmented sets have more instances per
-# image. Stay on the 80 GB tier the baseline used.
+# SAM 3 on 3 augmentation strategies x {multiclass, agnostic} = 6 tasks.
+# 80 GB GPUs only: the baseline already needed ~40-45 GB.
 #SBATCH --job-name=fp-sam3-aug
 #SBATCH --array=0-5%3
 #SBATCH --gres=gpu:1
@@ -39,8 +34,7 @@ AUG=${AUGS[$(( TID % 3 ))]}
 TRACK=${TRACKS[$(( TID / 3 ))]}
 
 if [[ "$TRACK" == "agnostic" ]]; then AGN=(--class-agnostic); SUFFIX=_agnostic; else AGN=(); SUFFIX=""; fi
-# SAM3_LOG_SUFFIX / SAM3_EXTRA_OVERRIDES let the smoke run write to an isolated
-# dir with fewer epochs; unset for the real runs.
+# SAM3_LOG_SUFFIX / SAM3_EXTRA_OVERRIDES are only set by the smoke run.
 DS="$PWD/data/sam3_${AUG}${SUFFIX}"
 LOG="$PWD/outputs/sam3_${AUG}${SUFFIX}${SAM3_LOG_SUFFIX:-}"
 echo "task ${TID}: aug=${AUG} track=${TRACK} dataset=${DS} logdir=${LOG} extra=[${SAM3_EXTRA_OVERRIDES:-}]"

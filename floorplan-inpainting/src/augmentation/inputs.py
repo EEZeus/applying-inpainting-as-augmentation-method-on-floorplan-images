@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from src.data.coco_dataset import read_split
 from src.utils.config import load_yaml, resolve_path
@@ -29,10 +28,17 @@ def load_inputs(config):
         raise ValueError("Frozen splits do not cover the dataset exactly")
     if resolve_path(dataset["image_dir"]).resolve() != resolve_path(canonical["image_dir"]).resolve():
         raise ValueError("Source image directory differs from Phase 1")
-    return coco, load_yaml(resolve_path(dataset["rare_classes_file"])), train, resolve_path(dataset["image_dir"])
+    return (
+        coco,
+        load_yaml(resolve_path(dataset["rare_classes_file"])),
+        train,
+        resolve_path(dataset["image_dir"]),
+    )
 
 
 def original_train(coco, train):
-    return {"images": [i for i in coco["images"] if i["id"] in train],
-            "annotations": [a for a in coco["annotations"] if a["image_id"] in train],
-            "categories": coco["categories"]}
+    return {
+        "images": [i for i in coco["images"] if i["id"] in train],
+        "annotations": [a for a in coco["annotations"] if a["image_id"] in train],
+        "categories": coco["categories"],
+    }

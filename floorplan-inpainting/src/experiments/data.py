@@ -1,4 +1,5 @@
 """Training datasets and samplers for the controlled Phase 3 matrix."""
+
 import json
 import os
 from collections import Counter, defaultdict
@@ -12,43 +13,84 @@ from src.data.coco_dataset import FloorplanCocoDataset, ocr_target_fields, read_
 from src.data.transforms import DetectionTransform
 from src.utils.config import resolve_path, split_dir
 
-
 SOURCE_FILES = {
-    "original": ("data/processed/instances_deduplicated.json", "../area_segmentation_coco/images", "full_plan"),
+    "original": (
+        "data/processed/instances_deduplicated.json",
+        "../area_segmentation_coco/images",
+        "full_plan",
+    ),
     "strategy_a": ("data/augmented_a/instances_train_aug_a.json", "data/augmented_a", "full_plan"),
-    "strategy_a_crops": ("data/augmented_a/crops/instances_train_aug_a_crops.json", "data/augmented_a/crops", "rare_crop"),
+    "strategy_a_crops": (
+        "data/augmented_a/crops/instances_train_aug_a_crops.json",
+        "data/augmented_a/crops",
+        "rare_crop",
+    ),
     "strategy_b": ("data/augmented_b/instances_train_aug_b.json", "data/augmented_b", "full_plan"),
-    "strategy_c_copy_paste": ("data/augmented_c/copy_paste/instances_train_aug_c.json",
-                               "data/augmented_c/copy_paste", "full_plan"),
-    "strategy_c_copy_paste_multi": ("data/augmented_c/copy_paste_multi/instances_train_augmented.json",
-                                     "data/augmented_c/copy_paste_multi", "full_plan"),
-    "strategy_c_feather_blend": ("data/augmented_c/feather_blend/instances_train_aug_c.json",
-                                  "data/augmented_c/feather_blend", "full_plan"),
-    "strategy_c_diffusion_inpaint": ("data/augmented_c/diffusion_inpaint/instances_train_aug_c.json",
-                                      "data/augmented_c/diffusion_inpaint", "full_plan"),
-    "strategy_lora_b": ("data/augmented_lora_b/instances_train_augmented.json",
-                         "data/augmented_lora_b", "full_plan"),
-    # Confirmatory study (e16/e17): two multi-room datasets composed from the
-    # SAME accepted (target, donor) pairs with the same builder seed, so they
-    # differ only in how the rare exemplar pixels were integrated.
-    "strategy_c_copy_paste_matched": ("data/augmented_c_matched/copy_paste_multi/instances_train_augmented.json",
-                                      "data/augmented_c_matched/copy_paste_multi", "full_plan"),
-    "strategy_c_wide_matched": ("data/augmented_c_matched/inpaint_wide_multi/instances_train_augmented.json",
-                                "data/augmented_c_matched/inpaint_wide_multi", "full_plan"),
-    # OCR study (e18/e20): common rooms whose printed label was erased by
-    # inpainting and replaced with a rendered, OCR-verified rare-class name.
-    "text_relabel": ("data/augmented_text/relabel/instances_train_augmented.json",
-                     "data/augmented_text/relabel", "full_plan"),
+    "strategy_c_copy_paste": (
+        "data/augmented_c/copy_paste/instances_train_aug_c.json",
+        "data/augmented_c/copy_paste",
+        "full_plan",
+    ),
+    "strategy_c_copy_paste_multi": (
+        "data/augmented_c/copy_paste_multi/instances_train_augmented.json",
+        "data/augmented_c/copy_paste_multi",
+        "full_plan",
+    ),
+    "strategy_c_feather_blend": (
+        "data/augmented_c/feather_blend/instances_train_aug_c.json",
+        "data/augmented_c/feather_blend",
+        "full_plan",
+    ),
+    "strategy_c_diffusion_inpaint": (
+        "data/augmented_c/diffusion_inpaint/instances_train_aug_c.json",
+        "data/augmented_c/diffusion_inpaint",
+        "full_plan",
+    ),
+    "strategy_lora_b": (
+        "data/augmented_lora_b/instances_train_augmented.json",
+        "data/augmented_lora_b",
+        "full_plan",
+    ),
+    # Confirmatory study (e16/e17): built from the same (target, donor) pairs and seed;
+    # they differ only in how the rare exemplar pixels were integrated.
+    "strategy_c_copy_paste_matched": (
+        "data/augmented_c_matched/copy_paste_multi/instances_train_augmented.json",
+        "data/augmented_c_matched/copy_paste_multi",
+        "full_plan",
+    ),
+    "strategy_c_wide_matched": (
+        "data/augmented_c_matched/inpaint_wide_multi/instances_train_augmented.json",
+        "data/augmented_c_matched/inpaint_wide_multi",
+        "full_plan",
+    ),
+    # OCR study (e18/e20): common rooms whose printed label was inpainted away and
+    # replaced with a rendered, OCR-verified rare-class name.
+    "text_relabel": (
+        "data/augmented_text/relabel/instances_train_augmented.json",
+        "data/augmented_text/relabel",
+        "full_plan",
+    ),
     # Follow-up (e22-e24): Strategy C copy-paste scaled towards class balance.
-    **{f"strategy_c_balance_b{dose}": (
-        f"data/augmented_c_balance/b{dose}/copy_paste_multi/instances_train_augmented.json",
-        f"data/augmented_c_balance/b{dose}/copy_paste_multi", "full_plan") for dose in (20, 50, 100)},
+    **{
+        f"strategy_c_balance_b{dose}": (
+            f"data/augmented_c_balance/b{dose}/copy_paste_multi/instances_train_augmented.json",
+            f"data/augmented_c_balance/b{dose}/copy_paste_multi",
+            "full_plan",
+        )
+        for dose in (20, 50, 100)
+    },
 }
 
 # Provenance tag of the deliberately converted room, per image strategy.
-EXPOSURE_TAGS = {"a": "synthetic_A", "b": "synthetic_B", "c": "synthetic_C", "c_multi": "synthetic_C_MULTI",
-                 "lora_b": "synthetic_LORA", "lora_multi": "synthetic_LORA_MULTI",
-                 "text_relabel": "synthetic_TEXT"}
+EXPOSURE_TAGS = {
+    "a": "synthetic_A",
+    "b": "synthetic_B",
+    "c": "synthetic_C",
+    "c_multi": "synthetic_C_MULTI",
+    "lora_b": "synthetic_LORA",
+    "lora_multi": "synthetic_LORA_MULTI",
+    "text_relabel": "synthetic_TEXT",
+}
 MULTI_ROOM_STRATEGIES = {"c_multi", "lora_multi", "text_relabel"}
 
 MATCHED_SOURCE_SUBDIRS = {
@@ -105,6 +147,7 @@ def _target_annotation_ids(coco, original):
 
 class ExperimentCocoDataset(Dataset):
     """COCO dataset retaining multiclass provenance under agnostic labels."""
+
     def __init__(self, source_name, image_ids, transform, class_agnostic=False, source_spec=None, ocr=None):
         if source_name not in SOURCE_FILES and source_spec is None:
             raise ValueError(f"Unknown experiment source: {source_name}")
@@ -120,12 +163,8 @@ class ExperimentCocoDataset(Dataset):
         self.ocr = ocr
         self.original_file_names = {int(i["id"]): i["file_name"] for i in original["images"]}
         frozen_train = set(map(int, image_ids))
-        # Cross-validation: the synthetic sets were generated from the original
-        # 70/15/15 train split, so under a CV fold some synthetic images derive
-        # from images now in this fold's val/test. Dropping them (rather than
-        # raising) is the leakage-safe behaviour: train only on synthetic whose
-        # source image is in the current train split. Unset -> original strict
-        # behaviour, so every non-CV run is byte-identical.
+        # Under a CV fold some synthetic images derive from this fold's val/test plans;
+        # the CV job sets FP_CV_DROP_OOF_SYNTHETIC to skip them instead of raising.
         drop_out_of_fold = bool(os.environ.get("FP_CV_DROP_OOF_SYNTHETIC"))
         selected = []
         for info in self.coco["images"]:
@@ -135,7 +174,9 @@ class ExperimentCocoDataset(Dataset):
             elif info.get("synthetic") or source_name != "original":
                 if drop_out_of_fold:
                     continue
-                raise ValueError(f"{source_name} contains image derived outside frozen train split: {source_id}")
+                raise ValueError(
+                    f"{source_name} contains image derived outside frozen train split: {source_id}"
+                )
         self.images = sorted(selected, key=lambda item: item["id"])
         allowed = {info["id"] for info in self.images}
         self.annotations = defaultdict(list)
@@ -152,10 +193,16 @@ class ExperimentCocoDataset(Dataset):
                 if annotation["id"] in self.target_annotation_ids:
                     source = EXPOSURE_TAGS[info.get("strategy")]
                 occurrences.append({"category_id": int(annotation["category_id"]), "source": source})
-            self.records.append({"image_id": info["id"], "sample_kind": sample_kind,
-                                 "source_name": source_name, "occurrences": occurrences,
-                                 "source_image_id": int(info.get("source_image_id", info["id"])),
-                                 "synthetic": bool(info.get("synthetic", False))})
+            self.records.append(
+                {
+                    "image_id": info["id"],
+                    "sample_kind": sample_kind,
+                    "source_name": source_name,
+                    "occurrences": occurrences,
+                    "source_image_id": int(info.get("source_image_id", info["id"])),
+                    "synthetic": bool(info.get("synthetic", False)),
+                }
+            )
 
     def __len__(self):
         return len(self.images)
@@ -187,11 +234,16 @@ class ExperimentCocoDataset(Dataset):
         else:
             masks_tensor = torch.zeros((0, height, width), dtype=torch.uint8)
             boxes = torch.zeros((0, 4), dtype=torch.float32)
-        target = {"boxes": boxes, "labels": torch.as_tensor(labels, dtype=torch.int64),
-                  "masks": masks_tensor, "image_id": torch.tensor(info["id"], dtype=torch.int64),
-                  "area": masks_tensor.flatten(1).sum(1).to(torch.float32),
-                  "iscrowd": torch.zeros(len(labels), dtype=torch.int64),
-                  "_exposure": exposure, "_sample_kind": self.sample_kind}
+        target = {
+            "boxes": boxes,
+            "labels": torch.as_tensor(labels, dtype=torch.int64),
+            "masks": masks_tensor,
+            "image_id": torch.tensor(info["id"], dtype=torch.int64),
+            "area": masks_tensor.flatten(1).sum(1).to(torch.float32),
+            "iscrowd": torch.zeros(len(labels), dtype=torch.int64),
+            "_exposure": exposure,
+            "_sample_kind": self.sample_kind,
+        }
         if self.ocr is not None:
             target.update(ocr_target_fields(self.ocr, self.ocr_key(info), width, height))
         return self.transform(image, target) if self.transform else (image, target)
@@ -204,14 +256,24 @@ class ExperimentCocoDataset(Dataset):
 
 def build_training_dataset(experiment_cfg, model_cfg, class_agnostic=False, ocr=None):
     train_ids = read_split(split_dir() / "train.txt")
-    transform = DetectionTransform(True, model_cfg["horizontal_flip_probability"],
-                                   model_cfg["brightness"], model_cfg["contrast"])
+    transform = DetectionTransform(
+        True, model_cfg["horizontal_flip_probability"], model_cfg["brightness"], model_cfg["contrast"]
+    )
     sources = experiment_cfg["dataset"]["sources"]
     overrides = experiment_cfg["dataset"].get("source_overrides", {})
-    datasets = [ExperimentCocoDataset(name, train_ids, transform, class_agnostic,
-                tuple(overrides[name][key] for key in ("annotation_file", "image_dir", "sample_kind")) if name in overrides else None,
-                ocr)
-                for name in sources]
+    datasets = [
+        ExperimentCocoDataset(
+            name,
+            train_ids,
+            transform,
+            class_agnostic,
+            tuple(overrides[name][key] for key in ("annotation_file", "image_dir", "sample_kind"))
+            if name in overrides
+            else None,
+            ocr,
+        )
+        for name in sources
+    ]
     if not datasets or any(len(dataset) == 0 for dataset in datasets):
         raise ValueError("Every configured training source must be non-empty")
     combined = datasets[0] if len(datasets) == 1 else ConcatDataset(datasets)
@@ -246,21 +308,21 @@ class FixedOrderSampler(Sampler):
 def paired_variant_indices(records, seed, samples_per_epoch, variant_probability):
     """Exposure-parity sampling: e0's plan order, synthetic variants swapped in.
 
-    Real plans are the non-synthetic records. Their per-epoch order is
-    ``torch.randperm(n_real)`` from a generator seeded with ``seed``, which is
-    exactly the order RandomSampler(replacement=False) gives e0 for the same
-    seed (e0's records are the same real plans sorted by image id). Each drawn
-    real plan is then replaced, with probability ``variant_probability``, by
-    one of its own synthetic variants (uniform choice), using an independent
-    generator. Every real plan therefore occupies exactly one step per epoch,
-    the step budget is unchanged, and two arms that share a seed see the same
-    plan sequence; they differ only in the pixels of the swapped draws.
+    The real plans are ordered by ``torch.randperm`` seeded with ``seed``, the same
+    order RandomSampler(replacement=False) gives e0. Each real plan is then replaced,
+    with probability ``variant_probability``, by one of its own synthetic variants
+    (separate RNG). Each real plan takes one step per epoch, so arms sharing a seed
+    see the same plan sequence and differ only in the swapped pixels.
     """
-    real = sorted((index for index, record in enumerate(records) if not record.get("synthetic")),
-                  key=lambda index: int(records[index]["image_id"]))
+    real = sorted(
+        (index for index, record in enumerate(records) if not record.get("synthetic")),
+        key=lambda index: int(records[index]["image_id"]),
+    )
     if len(real) != int(samples_per_epoch):
-        raise ValueError(f"paired_variant needs one step per real plan: {len(real)} real plans, "
-                         f"{samples_per_epoch} steps per epoch")
+        raise ValueError(
+            f"paired_variant needs one step per real plan: {len(real)} real plans, "
+            f"{samples_per_epoch} steps per epoch"
+        )
     if not 0.0 <= float(variant_probability) <= 1.0:
         raise ValueError("variant_probability must lie in [0, 1]")
     variants = {}
@@ -292,16 +354,25 @@ def build_epoch_sampler(records, experiment_cfg, seed, samples_per_epoch, origin
     """Build a deterministic fixed-budget sampler with an optional crop mixture."""
     sampling = experiment_cfg["sampling"]
     if sampling["mode"] == "paired_variant":
-        return FixedOrderSampler(paired_variant_indices(
-            records, seed, samples_per_epoch, float(sampling.get("variant_probability", 0.5))))
+        return FixedOrderSampler(
+            paired_variant_indices(
+                records, seed, samples_per_epoch, float(sampling.get("variant_probability", 0.5))
+            )
+        )
     weighted = sampling["mode"] == "rare_weighted"
     has_crops = any(record["sample_kind"] == "rare_crop" for record in records)
     if not weighted and not has_crops:
-        return RandomSampler(range(len(records)), replacement=len(records) < samples_per_epoch,
-                             num_samples=samples_per_epoch,
-                             generator=torch.Generator().manual_seed(seed))
-    raw = (_bounded_rare_weights(records, original_counts, rare_ids, sampling)
-           if weighted else np.ones(len(records), dtype=np.float64))
+        return RandomSampler(
+            range(len(records)),
+            replacement=len(records) < samples_per_epoch,
+            num_samples=samples_per_epoch,
+            generator=torch.Generator().manual_seed(seed),
+        )
+    raw = (
+        _bounded_rare_weights(records, original_counts, rare_ids, sampling)
+        if weighted
+        else np.ones(len(records), dtype=np.float64)
+    )
     if has_crops:
         crop_probability = float(experiment_cfg["dataset"]["rare_crop_probability"])
         if not 0 < crop_probability < 1:
@@ -312,8 +383,12 @@ def build_epoch_sampler(records, experiment_cfg, seed, samples_per_epoch, origin
         weights[~crop] = (1.0 - crop_probability) * raw[~crop] / raw[~crop].sum()
     else:
         weights = raw / raw.sum()
-    return WeightedRandomSampler(torch.as_tensor(weights, dtype=torch.double), samples_per_epoch,
-                                 replacement=True, generator=torch.Generator().manual_seed(seed))
+    return WeightedRandomSampler(
+        torch.as_tensor(weights, dtype=torch.double),
+        samples_per_epoch,
+        replacement=True,
+        generator=torch.Generator().manual_seed(seed),
+    )
 
 
 def original_train_counts():

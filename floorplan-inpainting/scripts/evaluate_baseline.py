@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-import argparse, json, sys
+import argparse
+import json
+import sys
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(ROOT))
-from src.evaluation.evaluate import evaluate_checkpoint
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform
-from src.visualization.predictions import render_prediction_comparisons
+from src.evaluation.evaluate import evaluate_checkpoint
 from src.utils.config import load_yaml
+from src.visualization.predictions import render_prediction_comparisons
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--checkpoint", default=ROOT / "outputs/checkpoints/best.pth")
@@ -19,14 +23,24 @@ args = parser.parse_args()
 dataset_cfg, model_cfg = load_yaml(args.dataset_config), load_yaml(args.model_config)
 rare_cfg = None if dataset_cfg.get("class_agnostic") else load_yaml(ROOT / "configs/rare_classes.yaml")
 metrics, rows, predictions = evaluate_checkpoint(
-    dataset_cfg, model_cfg, rare_cfg, args.checkpoint, args.split,
+    dataset_cfg,
+    model_cfg,
+    rare_cfg,
+    args.checkpoint,
+    args.split,
     args.output_dir or model_cfg.get("metrics_dir", "outputs/metrics"),
 )
-dataset = FloorplanCocoDataset(ROOT / dataset_cfg["image_dir"], ROOT / dataset_cfg["annotation_file"],
-                               read_split(ROOT / dataset_cfg["split_dir"] / f"{args.split}.txt"), DetectionTransform())
+dataset = FloorplanCocoDataset(
+    ROOT / dataset_cfg["image_dir"],
+    ROOT / dataset_cfg["annotation_file"],
+    read_split(ROOT / dataset_cfg["split_dir"] / f"{args.split}.txt"),
+    DetectionTransform(),
+)
 render_prediction_comparisons(
-    dataset, predictions,
+    dataset,
+    predictions,
     ROOT / (args.figures_dir or model_cfg.get("figures_dir", "outputs/figures/predictions")),
-    model_cfg["score_threshold"], 20,
+    model_cfg["score_threshold"],
+    20,
 )
 print(json.dumps({"metrics": metrics, "per_class": rows}, ensure_ascii=False, indent=2))

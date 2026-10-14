@@ -22,7 +22,7 @@ PYTHON=/netscratch/espandar/miniconda3/envs/inpainting/bin/python
 "$PYTHON" -c "import torch; assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))"
 ARGS=(--config configs/augmentation_c.yaml --num-workers "$NUM_WORKERS" --resolution "$RESOLUTION"
       --model-cache "$MODEL_CACHE" --dataset-root "$DATASET_ROOT" --qa-root "$QA_ROOT" --retry-errors)
-# Reusable preflight candidates use the same fingerprints and stable IDs as the full run.
+# The preflight sample is reused by the full run.
 "$PYTHON" scripts/generate_strategy_c.py "${ARGS[@]}" --mode all --limit 1
 if [ "${SMOKE_ONLY:-0}" = 1 ]; then exit 0; fi
 "$PYTHON" scripts/generate_strategy_c.py "${ARGS[@]}" --mode all

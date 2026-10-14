@@ -1,8 +1,6 @@
 #!/bin/bash
-# Confirmatory training: ARMS x SEEDS on TRACK (default: e0 e8 e16 e17, 12 seeds, agnostic).
+# Confirmatory training (ARMS x SEEDS on TRACK), then last.pth is evaluated on the 21 held-out plans.
 # Task id = arm_idx * N_SEEDS + seed_idx. Arms dropped by the gate exit 0.
-# After training, last.pth is evaluated on the 21 held-out plans with a
-# prediction dump (the pre-registered endpoint).
 #SBATCH --job-name=fp-confirm-train
 #SBATCH --array=0-47%16
 #SBATCH --gres=gpu:1

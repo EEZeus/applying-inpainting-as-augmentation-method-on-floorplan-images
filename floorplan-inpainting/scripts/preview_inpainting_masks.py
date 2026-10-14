@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -9,9 +8,8 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.augmentation.pipeline import plan_candidates, prepare_candidate
 from src.augmentation.inputs import load_inputs
-from src.data.coco_dataset import read_split
+from src.augmentation.pipeline import plan_candidates, prepare_candidate
 from src.utils.config import load_yaml, resolve_path
 
 
@@ -39,7 +37,7 @@ def main():
     indices = {"images": images, "annotations": annotations, "annotation_by_id": annotation_by_id}
     output_dir = resolve_path(config["output"]["qa_dir"], ROOT) / "mask_previews"
     output_dir.mkdir(parents=True, exist_ok=True)
-    for candidate in unique[:args.limit]:
+    for candidate in unique[: args.limit]:
         item = prepare_candidate(candidate, indices, image_dir, config)
         result, transform = item.mask_result, item.transform
         sl = (slice(transform.y0, transform.y1), slice(transform.x0, transform.x1))

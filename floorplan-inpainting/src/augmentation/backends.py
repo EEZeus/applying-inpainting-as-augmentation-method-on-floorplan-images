@@ -1,6 +1,6 @@
+import hashlib
 from abc import ABC, abstractmethod
 from pathlib import Path
-import hashlib
 
 import numpy as np
 from PIL import Image
@@ -22,16 +22,18 @@ class StableDiffusionInpaintingBackend(InpaintingBackend):
             import torch
             from diffusers import StableDiffusionInpaintPipeline
         except ImportError as error:
-            raise RuntimeError(
-                "Diffusers dependencies are missing; install requirements.txt"
-            ) from error
+            raise RuntimeError("Diffusers dependencies are missing; install requirements.txt") from error
 
         requested_device = config.get("device", "cuda")
         self.device = requested_device if requested_device != "cuda" or torch.cuda.is_available() else "cpu"
         requested_dtype = config.get("dtype", "fp16")
         self.torch_dtype = torch.float32
         if self.device.startswith("cuda"):
-            self.torch_dtype = torch.bfloat16 if requested_dtype == "bf16" and torch.cuda.is_bf16_supported() else torch.float16
+            self.torch_dtype = (
+                torch.bfloat16
+                if requested_dtype == "bf16" and torch.cuda.is_bf16_supported()
+                else torch.float16
+            )
         self.model_name = config["model_name"]
         self.model_revision = config.get("model_revision") or None
         self.cache_dir = config.get("cache_dir") or None
@@ -48,16 +50,21 @@ class StableDiffusionInpaintingBackend(InpaintingBackend):
             self.resolved_revision = "local"
         else:
             from huggingface_hub import snapshot_download
+
             model_path = snapshot_download(
-                self.model_name, revision=self.model_revision,
+                self.model_name,
+                revision=self.model_revision,
                 cache_dir=self.cache_dir,
                 allow_patterns=["*.json", "*.txt", "*.safetensors"],
                 ignore_patterns=["*.non_ema.*"],
             )
             self.resolved_revision = Path(model_path).name
         self.pipeline = StableDiffusionInpaintPipeline.from_pretrained(
-            model_path, variant=config.get("variant", "fp16"),
-            use_safetensors=True, local_files_only=True, **load_kwargs
+            model_path,
+            variant=config.get("variant", "fp16"),
+            use_safetensors=True,
+            local_files_only=True,
+            **load_kwargs,
         )
         self.pipeline = self.pipeline.to(self.device)
         self.lora_path = config.get("lora_path")
@@ -75,9 +82,7 @@ class StableDiffusionInpaintingBackend(InpaintingBackend):
                     digest.update(chunk)
             self.lora_sha256 = digest.hexdigest()
         self.pipeline.enable_attention_slicing()
-        self.gpu_name = (
-            torch.cuda.get_device_name(0) if self.device == "cuda" else "CPU"
-        )
+        self.gpu_name = torch.cuda.get_device_name(0) if self.device == "cuda" else "CPU"
         self._torch = torch
 
     def generate(self, image, mask, prompt, seed, **kwargs):

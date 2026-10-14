@@ -7,9 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.augmentation.pipeline import run_augmentation
 from src.augmentation.inputs import load_inputs
-from src.data.coco_dataset import read_split
+from src.augmentation.pipeline import run_augmentation
 from src.utils.config import load_yaml, resolve_path
 from src.utils.reproducibility import seed_everything
 
@@ -42,9 +41,16 @@ def main():
     coco, rare, train_ids, image_dir = load_inputs(config)
     seed_everything(int(config["seed"]))
     summary = run_augmentation(
-        config, coco, rare, train_ids, image_dir,
-        output_dir, qa_dir, limit=args.limit,
-        num_workers=args.num_workers, retry_errors=args.retry_errors,
+        config,
+        coco,
+        rare,
+        train_ids,
+        image_dir,
+        output_dir,
+        qa_dir,
+        limit=args.limit,
+        num_workers=args.num_workers,
+        retry_errors=args.retry_errors,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if summary["errors"]:

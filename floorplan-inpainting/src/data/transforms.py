@@ -1,5 +1,5 @@
 import random
-import torch
+
 from torchvision.transforms import functional as F
 
 
@@ -32,4 +32,3 @@ class DetectionTransform:
 
 def collate_fn(batch):
     return tuple(zip(*batch))
-

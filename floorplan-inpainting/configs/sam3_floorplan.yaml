@@ -1,4 +1,4 @@
-# Official SAM 3 single-GPU fine-tuning configuration for floor-plan instances.
+# SAM 3 single-GPU fine-tuning config for floor-plan instances.
 defaults:
   - _self_
 
@@ -47,10 +47,8 @@ transforms:
   val:
     - _target_: sam3.train.transforms.basic_for_api.ComposeAPI
       transforms:
-        # Must precede any geometric transform: with enable_segmentation the val
-        # dataset yields RLE-encoded masks, and RandomResizeAPI.resize() indexes
-        # obj.segment as a tensor. Without this the first val epoch dies with
-        # "KeyError: (None, None)". Matches Meta's official *_eval / *_val configs.
+        # Must precede any geometric transform: val masks are RLE-encoded and
+        # RandomResizeAPI.resize() otherwise fails with KeyError: (None, None).
         - _target_: sam3.train.transforms.segmentation.DecodeRle
         - _target_: sam3.train.transforms.basic_for_api.RandomResizeAPI
           sizes: ${scratch.resolution}
@@ -134,18 +132,15 @@ scratch:
     convert_mask_to_rle: true
     detection_threshold: 0.3
     use_presence: ${scratch.use_presence_eval}
-  # Training batches must be keyed so the trainer resolves trainer.loss.all
-  # (Sam3LossWrapper). Trainer._find_loss falls back to trainer.loss.default
-  # (DummyLoss, constant 0 with no grad_fn) for any key it cannot match, which
-  # breaks loss.backward(). Meta's official train configs use dict_key: all.
+  # dict_key must be `all` so trainer.loss.all is used; other keys fall back to the
+  # gradient-free DummyLoss and backward() fails.
   train_collate_fn:
     _target_: sam3.train.data.collator.collate_fn_api
     _partial_: true
     repeats: 1
     dict_key: all
     with_seg_masks: true
-  # Validation batches are keyed to match meters.val.floorplan; val does not
-  # backprop, so the DummyLoss fallback for this key is fine.
+  # Keyed to match meters.val.floorplan; the DummyLoss fallback is fine without backprop.
   collate_fn:
     _target_: sam3.train.data.collator.collate_fn_api
     _partial_: true

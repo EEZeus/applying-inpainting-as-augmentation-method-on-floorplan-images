@@ -19,8 +19,13 @@ def test_exact_duplicates_removed():
 
 
 def test_splits_are_disjoint_and_complete():
-    splits = {name: {int(x) for x in (ROOT / f"data/splits/{name}.txt").read_text().split()} for name in ("train", "val", "test")}
-    assert not (splits["train"] & splits["val"] or splits["train"] & splits["test"] or splits["val"] & splits["test"])
+    splits = {
+        name: {int(x) for x in (ROOT / f"data/splits/{name}.txt").read_text().split()}
+        for name in ("train", "val", "test")
+    }
+    assert not (
+        splits["train"] & splits["val"] or splits["train"] & splits["test"] or splits["val"] & splits["test"]
+    )
     assert len(set.union(*splits.values())) == 56
 
 

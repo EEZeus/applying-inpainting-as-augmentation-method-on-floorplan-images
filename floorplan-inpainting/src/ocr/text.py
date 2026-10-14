@@ -1,10 +1,10 @@
 """Dependency-free OCR text normalisation, token geometry and hashed char n-grams.
 
-Room labels in the plans are short German words ("Büro", "Spindraum H",
-"Putzr.") next to room numbers ("45-03-012"). Numbers, grid letters and symbol
-codes carry no room-type information, so a token is kept as a *label token*
-only if at least two letters survive normalisation.
+Room labels are short German words ("Büro", "Putzr.") next to room numbers
+("45-03-012"). A token counts as a label token only if at least two letters
+survive normalisation.
 """
+
 import difflib
 import re
 import unicodedata
@@ -61,7 +61,7 @@ def char_ngram_hash(text, dim=256, n=3):
     for word in folded.split():
         padded = f"<{word}>"
         for i in range(max(1, len(padded) - n + 1)):
-            gram = padded[i:i + n]
+            gram = padded[i : i + n]
             vector[zlib.crc32(gram.encode("utf-8")) % dim] += 1.0
     norm = np.linalg.norm(vector)
     return vector / norm if norm > 0 else vector
@@ -70,8 +70,12 @@ def char_ngram_hash(text, dim=256, n=3):
 def quad_to_box(points):
     """EasyOCR 4-point polygon -> axis-aligned [x0, y0, x1, y1]."""
     points = np.asarray(points, dtype=np.float64).reshape(-1, 2)
-    return [float(points[:, 0].min()), float(points[:, 1].min()),
-            float(points[:, 0].max()), float(points[:, 1].max())]
+    return [
+        float(points[:, 0].min()),
+        float(points[:, 1].min()),
+        float(points[:, 0].max()),
+        float(points[:, 1].max()),
+    ]
 
 
 def box_iou(a, b):
@@ -103,8 +107,10 @@ def merge_tile_tokens(tokens, iou_threshold=0.3, containment_threshold=0.7):
     for token in order:
         duplicate = False
         for other in kept:
-            if (box_iou(token["box"], other["box"]) >= iou_threshold
-                    or box_containment(token["box"], other["box"]) >= containment_threshold):
+            if (
+                box_iou(token["box"], other["box"]) >= iou_threshold
+                or box_containment(token["box"], other["box"]) >= containment_threshold
+            ):
                 duplicate = True
                 break
         if not duplicate:

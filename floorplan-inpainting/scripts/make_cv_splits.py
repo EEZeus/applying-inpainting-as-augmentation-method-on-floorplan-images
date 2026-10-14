@@ -1,22 +1,15 @@
 #!/usr/bin/env python3
-"""Rotated held-out evaluation splits (cross-testing), image-level K-fold.
+"""Rotated held-out evaluation splits: image-level K-fold over the 21 held-out images.
 
-Training is NOT touched: it stays the frozen 35-image train split for every
-fold, so the augmentation datasets (built from that split) and every grid
-result stay directly comparable. Only the evaluation set rotates.
+Training stays the frozen 35-image split for every fold, so the augmented datasets and grid
+results remain comparable; only test.txt rotates. The held-out images span just 3 projects,
+so a project-aware split with K>3 is impossible; folds are assigned round-robin over sorted
+IDs and each held-out image is tested once. The CV eval (`run_experiment.py --eval-checkpoint`)
+reads only test.txt and never trains.
 
-The 21 held-out images (frozen val + test) span just 3 projects, so a
-project-aware K>3 partition is impossible. It is also unnecessary here: the CV
-eval runs in `run_experiment.py --eval-checkpoint` mode, which reads only
-test.txt (never val.txt) and never trains, so the only leakage that matters -
-between the frozen-35 train and the eval images - is already prevented. The 21
-held-out images are therefore split image-level, round-robin over sorted IDs,
-into K folds; across the folds every held-out image is tested exactly once.
-
-Writes data/splits_cv/fold{0..K-1}/{train,val,test}.txt (+ manifest.json).
-train.txt / val.txt are verbatim copies of the frozen split for robustness;
-only test.txt differs per fold and only test.txt is consumed by the CV eval.
+Writes data/splits_cv/fold{k}/{train,val,test}.txt and manifest.json.
 """
+
 import argparse
 import json
 import sys
@@ -38,8 +31,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--splits", type=Path, default=ROOT / "data/splits")
-    parser.add_argument("--annotations", type=Path,
-                        default=ROOT / "data/processed/instances_deduplicated.json")
+    parser.add_argument(
+        "--annotations", type=Path, default=ROOT / "data/processed/instances_deduplicated.json"
+    )
     parser.add_argument("--out", type=Path, default=ROOT / "data/splits_cv")
     args = parser.parse_args()
 
@@ -51,8 +45,9 @@ def main() -> None:
     if args.folds < 2 or args.folds > len(heldout):
         raise ValueError(f"--folds {args.folds} invalid for {len(heldout)} held-out images")
 
-    fold_test = [sorted(heldout[i] for i in range(len(heldout)) if i % args.folds == k)
-                 for k in range(args.folds)]
+    fold_test = [
+        sorted(heldout[i] for i in range(len(heldout)) if i % args.folds == k) for k in range(args.folds)
+    ]
     if sorted(i for f in fold_test for i in f) != heldout:
         raise ValueError("fold union != held-out set")
 
@@ -73,25 +68,32 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     train_txt = "".join(f"{i}\n" for i in train_ids)
     val_txt = "".join(f"{i}\n" for i in val_ids)
-    manifest = {"folds": args.folds, "mode": "rotated_heldout_eval_imagelevel",
-                "train": "frozen data/splits/train.txt (unchanged)",
-                "pooled_test_images": len(heldout), "fold": []}
+    manifest = {
+        "folds": args.folds,
+        "mode": "rotated_heldout_eval_imagelevel",
+        "train": "frozen data/splits/train.txt (unchanged)",
+        "pooled_test_images": len(heldout),
+        "fold": [],
+    }
     for k in range(args.folds):
         fold_dir = args.out / f"fold{k}"
         fold_dir.mkdir(parents=True, exist_ok=True)
         (fold_dir / "train.txt").write_text(train_txt, encoding="utf-8")
         (fold_dir / "val.txt").write_text(val_txt, encoding="utf-8")
         (fold_dir / "test.txt").write_text("".join(f"{i}\n" for i in fold_test[k]), encoding="utf-8")
-        manifest["fold"].append({
-            "k": k,
-            "test_ids": fold_test[k],
-            "test_projects": sorted({proj_of[i] for i in fold_test[k]}),
-            "n_test": len(fold_test[k]),
-            "test_rare_support": rare_support(fold_test[k]),
-        })
+        manifest["fold"].append(
+            {
+                "k": k,
+                "test_ids": fold_test[k],
+                "test_projects": sorted({proj_of[i] for i in fold_test[k]}),
+                "n_test": len(fold_test[k]),
+                "test_rare_support": rare_support(fold_test[k]),
+            }
+        )
 
     manifest["pooled_test_rare_support"] = {
-        c: sum(f["test_rare_support"][c] for f in manifest["fold"]) for c in PRIMARY_RARE}
+        c: sum(f["test_rare_support"][c] for f in manifest["fold"]) for c in PRIMARY_RARE
+    }
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))
 

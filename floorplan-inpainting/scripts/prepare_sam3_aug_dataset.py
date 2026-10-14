@@ -6,9 +6,9 @@ train/  <- one of the augmented training COCOs (real 35 + synthetic), file
 val/    <- frozen real val split   (data/splits/val.txt  over instances_deduplicated.json)
 test/   <- frozen real test split  (data/splits/test.txt over instances_deduplicated.json)
 
-So training sees the augmentation and evaluation stays on untouched real images -
-the same contract as the Mask R-CNN experiment matrix, now with a SAM 3 backbone.
+Evaluation stays on untouched real images, as in the Mask R-CNN experiments.
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -51,10 +51,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--aug", required=True, choices=sorted(AUG))
     parser.add_argument("--class-agnostic", action="store_true")
-    parser.add_argument("--real-annotations", type=Path,
-                        default=ROOT / "data/processed/instances_deduplicated.json")
-    parser.add_argument("--real-images", type=Path,
-                        default=ROOT.parent / "area_segmentation_coco/images")
+    parser.add_argument(
+        "--real-annotations", type=Path, default=ROOT / "data/processed/instances_deduplicated.json"
+    )
+    parser.add_argument("--real-images", type=Path, default=ROOT.parent / "area_segmentation_coco/images")
     parser.add_argument("--splits", type=Path, default=ROOT / "data/splits")
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
@@ -66,8 +66,9 @@ def main() -> None:
 
     real = json.loads(args.real_annotations.read_text(encoding="utf-8"))
     aug = json.loads(aug_json.read_text(encoding="utf-8"))
-    if [c["name"] for c in sorted(real["categories"], key=lambda c: c["id"])] != \
-       [c["name"] for c in sorted(aug["categories"], key=lambda c: c["id"])]:
+    if [c["name"] for c in sorted(real["categories"], key=lambda c: c["id"])] != [
+        c["name"] for c in sorted(aug["categories"], key=lambda c: c["id"])
+    ]:
         raise ValueError("augmented and real category lists differ")
     if args.class_agnostic:
         real = _to_class_agnostic(real)
@@ -75,7 +76,7 @@ def main() -> None:
 
     summary = {}
 
-    # --- train: the augmented set, basenames symlinked from the augmentation dir
+    # train: the augmented set, basenames symlinked from the augmentation dir
     train_dir = out / "train"
     train_dir.mkdir(parents=True, exist_ok=True)
     train_images = []
@@ -88,17 +89,27 @@ def main() -> None:
             with Image.open(src) as im:
                 width, height = im.size
         # keep only standard COCO image fields for the SAM 3 loader
-        train_images.append({"id": int(info["id"]), "file_name": base,
-                             "width": int(width), "height": int(height)})
+        train_images.append(
+            {"id": int(info["id"]), "file_name": base, "width": int(width), "height": int(height)}
+        )
     train_image_ids = {int(i["id"]) for i in train_images}
     train_anns = [a for a in aug["annotations"] if int(a["image_id"]) in train_image_ids]
-    (train_dir / "_annotations.coco.json").write_text(json.dumps({
-        "info": aug.get("info", {}), "licenses": aug.get("licenses", []),
-        "images": train_images, "annotations": train_anns, "categories": aug["categories"],
-    }, ensure_ascii=False), encoding="utf-8")
+    (train_dir / "_annotations.coco.json").write_text(
+        json.dumps(
+            {
+                "info": aug.get("info", {}),
+                "licenses": aug.get("licenses", []),
+                "images": train_images,
+                "annotations": train_anns,
+                "categories": aug["categories"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     summary["train"] = {"images": len(train_images), "annotations": len(train_anns)}
 
-    # --- val / test: frozen real splits over the real (optionally agnostic) COCO
+    # val/test: frozen real splits over the real (optionally agnostic) COCO
     real_by_id = {int(i["id"]): i for i in real["images"]}
     for split in ("val", "test"):
         allowed = _ids(args.splits / f"{split}.txt")
@@ -111,10 +122,19 @@ def main() -> None:
         for info in images:
             _link(split_dir / info["file_name"], (args.real_images / info["file_name"]).resolve())
         anns = [a for a in real["annotations"] if int(a["image_id"]) in allowed]
-        (split_dir / "_annotations.coco.json").write_text(json.dumps({
-            "info": real.get("info", {}), "licenses": real.get("licenses", []),
-            "images": images, "annotations": anns, "categories": real["categories"],
-        }, ensure_ascii=False), encoding="utf-8")
+        (split_dir / "_annotations.coco.json").write_text(
+            json.dumps(
+                {
+                    "info": real.get("info", {}),
+                    "licenses": real.get("licenses", []),
+                    "images": images,
+                    "annotations": anns,
+                    "categories": real["categories"],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         summary[split] = {"images": len(images), "annotations": len(anns)}
 
     (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

@@ -1,8 +1,6 @@
 #!/bin/bash
-# Experiment 1: rotated held-out CV evaluation.
-# Re-evaluates the 6 key grid checkpoints (seed_42) on 5 rotating held-out folds,
-# so every held-out image is tested once. No training - each task is a ~5 min
-# eval. 6 arms x 2 tracks x 5 folds = 60 tasks.
+# Rotated held-out CV: evaluate 6 seed-42 grid checkpoints on 5 folds.
+# 6 arms x 2 tracks x 5 folds = 60 eval-only tasks.
 #SBATCH --job-name=fp-cv-eval
 #SBATCH --array=0-59%20
 #SBATCH --gres=gpu:1
@@ -18,7 +16,7 @@ export TORCH_HOME="${TORCH_HOME:-/netscratch/espandar/torch_cache}"
 export OMP_NUM_THREADS=2
 PY=/netscratch/espandar/miniconda3/envs/inpainting/bin/python
 
-# index order fixed: task id encodes (arm, track, fold)
+# Task ids encode (arm, track, fold); do not reorder.
 ARMS=(e0 e1 e6 e8 e10 e12)
 CFG=(
   configs/experiments/e0_original.yaml

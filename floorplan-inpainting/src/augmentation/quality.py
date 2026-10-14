@@ -25,9 +25,7 @@ def evaluate_quality(original, augmented, safe_mask, boundary_mask, dark_thresho
 
     safe_count = int(safe_mask.sum())
     if safe_count:
-        absolute = np.abs(
-            original[safe_mask].astype(np.int16) - augmented[safe_mask].astype(np.int16)
-        )
+        absolute = np.abs(original[safe_mask].astype(np.int16) - augmented[safe_mask].astype(np.int16))
         changed_inside = float(changed[safe_mask].mean())
         mean_absolute = float(absolute.mean())
         before_values = original[safe_mask]
@@ -41,7 +39,9 @@ def evaluate_quality(original, augmented, safe_mask, boundary_mask, dark_thresho
         generated_std = float(after_gray.astype(np.float32).std())
         source_dark = before_gray <= dark_threshold
         source_dark_count = int(source_dark.sum())
-        source_dark_retention = float((after_gray[source_dark] <= dark_threshold).mean()) if source_dark_count else 0.0
+        source_dark_retention = (
+            float((after_gray[source_dark] <= dark_threshold).mean()) if source_dark_count else 0.0
+        )
         saturated_before = _fraction(np.ptp(before_values.astype(np.int16), axis=1) > 80)
         saturated_after = _fraction(np.ptp(after_values.astype(np.int16), axis=1) > 80)
     else:
@@ -77,17 +77,34 @@ def evaluate_quality(original, augmented, safe_mask, boundary_mask, dark_thresho
         (outside_ratio != 0.0, "outside_pixels_changed"),
         (boundary_ratio != 0.0, "protected_boundary_changed"),
         (safe_count == 0, "empty_safe_mask"),
-        (changed_inside < float(config.get("min_changed_fraction_inside", 0.01)), "generated_region_almost_identical"),
-        (mean_absolute < float(config.get("min_mean_absolute_change", 1.0)), "generated_region_almost_identical"),
-        (source_dark_count >= int(config.get("min_source_dark_pixels_for_retention_check", 5))
-         and source_dark_retention > float(config.get("max_source_dark_retention_fraction", 1.0)),
-         "source_semantic_strokes_retained"),
+        (
+            changed_inside < float(config.get("min_changed_fraction_inside", 0.01)),
+            "generated_region_almost_identical",
+        ),
+        (
+            mean_absolute < float(config.get("min_mean_absolute_change", 1.0)),
+            "generated_region_almost_identical",
+        ),
+        (
+            source_dark_count >= int(config.get("min_source_dark_pixels_for_retention_check", 5))
+            and source_dark_retention > float(config.get("max_source_dark_retention_fraction", 1.0)),
+            "source_semantic_strokes_retained",
+        ),
         (generated_std < float(config.get("min_generated_region_std", 2.0)), "generated_region_uniform"),
-        (near_white_after > float(config.get("max_near_white_fraction_after", 0.995)), "generated_region_blank"),
-        (dark_after > config.get("max_dark_fraction_after", .50)
-         and dark_after - dark_before > config.get("max_dark_fraction_increase", .30), "extreme_dark_filling"),
-        (saturated_after > config.get("max_saturated_fraction_after", .50)
-         and saturated_after - saturated_before > config.get("max_saturated_fraction_increase", .30), "extreme_color_filling"),
+        (
+            near_white_after > float(config.get("max_near_white_fraction_after", 0.995)),
+            "generated_region_blank",
+        ),
+        (
+            dark_after > config.get("max_dark_fraction_after", 0.50)
+            and dark_after - dark_before > config.get("max_dark_fraction_increase", 0.30),
+            "extreme_dark_filling",
+        ),
+        (
+            saturated_after > config.get("max_saturated_fraction_after", 0.50)
+            and saturated_after - saturated_before > config.get("max_saturated_fraction_increase", 0.30),
+            "extreme_color_filling",
+        ),
     ]
     reason = next((reason for failed, reason in checks if failed), None)
     return QualityResult(reason is None, reason, metrics)

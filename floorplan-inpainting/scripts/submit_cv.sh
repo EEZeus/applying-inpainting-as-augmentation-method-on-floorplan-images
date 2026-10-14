@@ -1,6 +1,5 @@
 #!/bin/bash
-# Experiment 1 chain: build CV splits -> smoke 1 eval -> full 60-eval array -> analyze.
-# Run from the cluster checkout: cd /netscratch/espandar/inpainting/floorplan-inpainting
+# Rotated held-out CV chain: build splits -> 1-task smoke -> 60-task eval array -> analyze.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "${HERE}"

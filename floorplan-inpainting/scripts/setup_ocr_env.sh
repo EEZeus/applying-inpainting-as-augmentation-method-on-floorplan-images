@@ -1,8 +1,6 @@
 #!/bin/bash
-# One-time setup on the cluster LOGIN node (has internet): a separate `ocr`
-# conda env (EasyOCR + transformers, torch pinned to the inpainting env's
-# 2.1.2+cu121) and offline copies of the EasyOCR and multilingual-e5 weights.
-#   bash scripts/setup_ocr_env.sh
+# One-time setup on the login node: create the `ocr` conda env and cache the
+# EasyOCR and multilingual-e5 weights for offline jobs.
 set -euo pipefail
 CONDA=/netscratch/espandar/miniconda3
 ENV=${CONDA}/envs/ocr

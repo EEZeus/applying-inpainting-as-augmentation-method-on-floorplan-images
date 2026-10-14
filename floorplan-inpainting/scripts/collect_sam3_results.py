@@ -8,6 +8,7 @@ reproducible from artefacts and independent of log parsing.
 
 Writes outputs/final/sam3/summary.{json,csv}.
 """
+
 import csv
 import json
 import sys
@@ -33,6 +34,7 @@ RUNS = [
 def _ap(gt_path, pred_path, iou_type):
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
+
     buf = StringIO()
     with redirect_stdout(buf):
         coco_gt = COCO(str(gt_path))
@@ -54,8 +56,14 @@ def main():
         gt = ROOT / "data" / data_name / "test" / "_annotations.coco.json"
         bbox_pred = ROOT / "outputs" / out_name / "dumps/test/bbox/coco_predictions_bbox.json"
         mask_pred = ROOT / "outputs" / out_name / "dumps/test/mask/coco_predictions_segm.json"
-        entry = {"run": label, "data": data_name, "outputs": out_name,
-                 "status": "ok", "bbox": None, "mask": None}
+        entry = {
+            "run": label,
+            "data": data_name,
+            "outputs": out_name,
+            "status": "ok",
+            "bbox": None,
+            "mask": None,
+        }
         try:
             if not gt.is_file():
                 entry["status"] = "no test GT"
@@ -64,14 +72,18 @@ def main():
             else:
                 entry["bbox"] = _ap(gt, bbox_pred, "bbox") if bbox_pred.is_file() else None
                 entry["mask"] = _ap(gt, mask_pred, "segm")
-        except Exception as exc:  # noqa: BLE001 - report, do not abort the table
+        except Exception as exc:  # record the failure and keep going
             entry["status"] = f"error: {exc}"
         report.append(entry)
-        rows.append({"run": label,
-                     "bbox_AP": entry["bbox"]["AP"] if entry["bbox"] else None,
-                     "mask_AP": entry["mask"]["AP"] if entry["mask"] else None,
-                     "mask_AP50": entry["mask"]["AP50"] if entry["mask"] else None,
-                     "status": entry["status"]})
+        rows.append(
+            {
+                "run": label,
+                "bbox_AP": entry["bbox"]["AP"] if entry["bbox"] else None,
+                "mask_AP": entry["mask"]["AP"] if entry["mask"] else None,
+                "mask_AP50": entry["mask"]["AP50"] if entry["mask"] else None,
+                "status": entry["status"],
+            }
+        )
 
     (out_dir / "summary.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     with (out_dir / "summary.csv").open("w", newline="", encoding="utf-8") as fh:

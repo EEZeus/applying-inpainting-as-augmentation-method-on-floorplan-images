@@ -1,7 +1,7 @@
 import copy
-import hashlib
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import shutil
@@ -85,7 +85,7 @@ def read_metadata(path):
     records = []
     if not path.is_file():
         return records
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:
@@ -110,9 +110,9 @@ def plan_candidates(coco, train_ids, rare_config, augmentation_config):
     eligible_ids = {key for key, value in configured.items() if value["role"] in include_roles}
     targets = sorted(
         (
-            annotation for annotation in coco["annotations"]
-            if int(annotation["image_id"]) in train_ids
-            and int(annotation["category_id"]) in eligible_ids
+            annotation
+            for annotation in coco["annotations"]
+            if int(annotation["image_id"]) in train_ids and int(annotation["category_id"]) in eligible_ids
         ),
         key=lambda annotation: int(annotation["id"]),
     )
@@ -125,30 +125,32 @@ def plan_candidates(coco, train_ids, rare_config, augmentation_config):
     for target in targets:
         for variant in range(variants):
             index = len(candidates)
-            candidates.append(Candidate(
-                sample_id=f"a-ann{int(target['id'])}-v{variant}",
-                candidate_index=index,
-                source_image_id=int(target["image_id"]),
-                target_annotation_id=int(target["id"]),
-                category_id=int(target["category_id"]),
-                category_name=categories[int(target["category_id"])],
-                variant_index=variant,
-                seed=int(augmentation_config["seed"]) + index,
-                synthetic_image_id=max_image_id + 1 + index,
-                annotation_id_start=max_annotation_id + 1 + index * annotation_stride,
-            ))
+            candidates.append(
+                Candidate(
+                    sample_id=f"a-ann{int(target['id'])}-v{variant}",
+                    candidate_index=index,
+                    source_image_id=int(target["image_id"]),
+                    target_annotation_id=int(target["id"]),
+                    category_id=int(target["category_id"]),
+                    category_name=categories[int(target["category_id"])],
+                    variant_index=variant,
+                    seed=int(augmentation_config["seed"]) + index,
+                    synthetic_image_id=max_image_id + 1 + index,
+                    annotation_id_start=max_annotation_id + 1 + index * annotation_stride,
+                )
+            )
     return candidates, annotation_stride
 
 
 def run_fingerprint(coco, candidates, annotation_stride, config):
-    # Optional Strategy C provenance must not invalidate the fingerprints of
-    # already-generated A/B runs. Before Strategy C these fields did not exist,
-    # so omit unset values from the canonical representation.
-    strategy_c_fields = {"donor_image_id", "donor_annotation_id", "donor_category_id",
-                         "integration_mode"}
+    # Omit unset Strategy C fields so fingerprints of earlier A/B runs stay valid.
+    strategy_c_fields = {"donor_image_id", "donor_annotation_id", "donor_category_id", "integration_mode"}
     serialized_candidates = [
-        {key: value for key, value in candidate.__dict__.items()
-         if key not in strategy_c_fields or value is not None}
+        {
+            key: value
+            for key, value in candidate.__dict__.items()
+            if key not in strategy_c_fields or value is not None
+        }
         for candidate in candidates
     ]
     relevant = {
@@ -182,10 +184,13 @@ def prepare_candidate(candidate, coco_indices, image_dir, config):
     others = [item for item in source_annotations if int(item["id"]) != candidate.target_annotation_id]
     result = build_safe_mask(original, target, others, config["mask"])
     transform = CropTransform.from_bbox(
-        target["bbox"], original.shape[1], original.shape[0],
-        config["crop"]["context_fraction"], config["crop"]["output_size"],
+        target["bbox"],
+        original.shape[1],
+        original.shape[0],
+        config["crop"]["context_fraction"],
+        config["crop"]["output_size"],
     )
-    source_crop = original[transform.y0:transform.y1, transform.x0:transform.x1].copy()
+    source_crop = original[transform.y0 : transform.y1, transform.x0 : transform.x1].copy()
     return PreparedCandidate(
         candidate=candidate,
         source_info=source_info,
@@ -241,7 +246,9 @@ def _record_base(prepared, fingerprint, config, backend_metadata):
         "mutable_fraction": result.mutable_fraction,
         "dark_threshold": result.dark_threshold,
         "model_name": backend_metadata.get("model_name", config["generation"]["model_name"]),
-        "model_revision": backend_metadata.get("model_revision", config["generation"].get("model_revision") or "main"),
+        "model_revision": backend_metadata.get(
+            "model_revision", config["generation"].get("model_revision") or "main"
+        ),
         "device": backend_metadata.get("device", config["generation"].get("device", "cuda")),
         "dtype": backend_metadata.get("dtype", config["generation"].get("dtype", "fp16")),
         "gpu": backend_metadata.get("gpu", "unknown"),
@@ -254,11 +261,16 @@ def _record_base(prepared, fingerprint, config, backend_metadata):
         "source_category_id": prepared.target_annotation["category_id"],
         "source_geometry": candidate.source_geometry,
         "target_geometry_range": candidate.target_geometry_range,
-        "decision_method": ("automatic_geometry_pixel_and_structural_qc" if candidate.strategy in {"lora_b", "lora_multi"} else
-                            "automatic_geometry_and_pixel_qc" if candidate.strategy == "b" else
-                            "automatic_pixel_qc"),
-        "semantic_correctness": ("unverified" if candidate.strategy in {"b", "lora_b", "lora_multi"} else
-                                 "source_label_preserved"),
+        "decision_method": (
+            "automatic_geometry_pixel_and_structural_qc"
+            if candidate.strategy in {"lora_b", "lora_multi"}
+            else "automatic_geometry_and_pixel_qc"
+            if candidate.strategy == "b"
+            else "automatic_pixel_qc"
+        ),
+        "semantic_correctness": (
+            "unverified" if candidate.strategy in {"b", "lora_b", "lora_multi"} else "source_label_preserved"
+        ),
     }
 
 
@@ -294,19 +306,33 @@ def _copy_original_train_images(coco, train_ids, image_dir, output_dir):
     return copied
 
 
-def build_augmented_coco(coco, train_ids, candidates, records, image_dir, output_dir, annotation_stride,
-                         filename="instances_train_aug_a.json", include_originals=True):
+def build_augmented_coco(
+    coco,
+    train_ids,
+    candidates,
+    records,
+    image_dir,
+    output_dir,
+    annotation_stride,
+    filename="instances_train_aug_a.json",
+    include_originals=True,
+):
     accepted = {item["sample_id"]: item for item in records if item["status"] == "accepted"}
     images_by_id = {int(item["id"]): item for item in coco["images"]}
     annotations_by_image = defaultdict(list)
     for annotation in coco["annotations"]:
         annotations_by_image[int(annotation["image_id"])].append(annotation)
     output = {
-        key: copy.deepcopy(value) for key, value in coco.items()
-        if key not in {"images", "annotations"}
+        key: copy.deepcopy(value) for key, value in coco.items() if key not in {"images", "annotations"}
     }
-    output["images"] = _copy_original_train_images(coco, train_ids, image_dir, output_dir) if include_originals else []
-    output["annotations"] = [copy.deepcopy(item) for item in coco["annotations"] if int(item["image_id"]) in train_ids] if include_originals else []
+    output["images"] = (
+        _copy_original_train_images(coco, train_ids, image_dir, output_dir) if include_originals else []
+    )
+    output["annotations"] = (
+        [copy.deepcopy(item) for item in coco["annotations"] if int(item["image_id"]) in train_ids]
+        if include_originals
+        else []
+    )
     for candidate in candidates:
         record = accepted.get(candidate.sample_id)
         if record is None:
@@ -314,31 +340,40 @@ def build_augmented_coco(coco, train_ids, candidates, records, image_dir, output
         if candidate.source_image_id not in train_ids:
             raise ValueError("Non-training source in candidate export")
         source = copy.deepcopy(images_by_id[candidate.source_image_id])
-        source.update({
-            "id": candidate.synthetic_image_id,
-            "file_name": record["output_file"],
-            "source_image_id": candidate.source_image_id,
-            "target_annotation_id": candidate.target_annotation_id,
-            "synthetic": True,
-            "strategy": candidate.strategy,
-            "sample_id": candidate.sample_id,
-        })
+        source.update(
+            {
+                "id": candidate.synthetic_image_id,
+                "file_name": record["output_file"],
+                "source_image_id": candidate.source_image_id,
+                "target_annotation_id": candidate.target_annotation_id,
+                "synthetic": True,
+                "strategy": candidate.strategy,
+                "sample_id": candidate.sample_id,
+            }
+        )
         if candidate.donor_annotation_id is not None:
-            source.update({
-                "donor_image_id": candidate.donor_image_id,
-                "donor_annotation_id": candidate.donor_annotation_id,
-                "donor_category_id": candidate.donor_category_id,
-                "integration_mode": candidate.integration_mode,
-            })
+            source.update(
+                {
+                    "donor_image_id": candidate.donor_image_id,
+                    "donor_annotation_id": candidate.donor_annotation_id,
+                    "donor_category_id": candidate.donor_category_id,
+                    "integration_mode": candidate.integration_mode,
+                }
+            )
         output["images"].append(source)
-        source_annotations = sorted(annotations_by_image[candidate.source_image_id], key=lambda item: int(item["id"]))
+        source_annotations = sorted(
+            annotations_by_image[candidate.source_image_id], key=lambda item: int(item["id"])
+        )
         if len(source_annotations) > annotation_stride:
             raise ValueError("Annotation stride is smaller than source annotation count")
         for ordinal, original in enumerate(source_annotations):
             duplicate = copy.deepcopy(original)
             duplicate["id"] = candidate.annotation_id_start + ordinal
             duplicate["image_id"] = candidate.synthetic_image_id
-            if candidate.strategy in {"b", "c", "lora_b", "lora_multi"} and original["id"] == candidate.target_annotation_id:
+            if (
+                candidate.strategy in {"b", "c", "lora_b", "lora_multi"}
+                and original["id"] == candidate.target_annotation_id
+            ):
                 duplicate["category_id"] = candidate.category_id
             output["annotations"].append(duplicate)
     output["images"].sort(key=lambda item: int(item["id"]))
@@ -371,6 +406,7 @@ def validate_augmented_coco(coco, output_dir, train_ids=None):
             if handle.size != (int(image["width"]), int(image["height"])):
                 raise ValueError(f"Image dimensions mismatch for {path}")
     from pycocotools.coco import COCO
+
     index = COCO()
     index.dataset = coco
     index.createIndex()
@@ -378,7 +414,11 @@ def validate_augmented_coco(coco, output_dir, train_ids=None):
         polygons = annotation["segmentation"]
         if not polygons or any(len(p) < 6 or len(p) % 2 or not np.isfinite(p).all() for p in polygons):
             raise ValueError("Invalid polygon")
-        if len(annotation["bbox"]) != 4 or not np.isfinite(annotation["bbox"]).all() or min(annotation["bbox"][2:]) <= 0:
+        if (
+            len(annotation["bbox"]) != 4
+            or not np.isfinite(annotation["bbox"]).all()
+            or min(annotation["bbox"][2:]) <= 0
+        ):
             raise ValueError("Invalid bbox")
         if not np.isfinite(annotation["area"]) or annotation["area"] <= 0:
             raise ValueError("Invalid area")
@@ -388,7 +428,11 @@ def validate_augmented_coco(coco, output_dir, train_ids=None):
         if "crop_transform" in info:
             for polygon in annotation["segmentation"]:
                 points = np.asarray(polygon).reshape(-1, 2)
-                if (points < -1e-6).any() or (points[:, 0] > info["width"] + 1e-6).any() or (points[:, 1] > info["height"] + 1e-6).any():
+                if (
+                    (points < -1e-6).any()
+                    or (points[:, 0] > info["width"] + 1e-6).any()
+                    or (points[:, 1] > info["height"] + 1e-6).any()
+                ):
                     raise ValueError("Crop polygon exceeds image bounds")
 
 
@@ -398,10 +442,22 @@ def summarize(records, candidate_count, source_instance_count):
     accepted = [item for item in values if item["status"] == "accepted"]
     rejected = [item for item in values if item["status"] == "rejected"]
     errors = [item for item in values if item["status"] == "error"]
-    times = [float(item["generation_time_seconds"]) for item in values if item.get("generation_time_seconds") is not None]
-    mutables = [float(item["mutable_fraction"]) for item in values if item.get("mutable_fraction") is not None]
-    outside = [float(item["outside_change_ratio"]) for item in values if item.get("outside_change_ratio") is not None]
-    boundary = [float(item["protected_boundary_change_ratio"]) for item in values if item.get("protected_boundary_change_ratio") is not None]
+    times = [
+        float(item["generation_time_seconds"])
+        for item in values
+        if item.get("generation_time_seconds") is not None
+    ]
+    mutables = [
+        float(item["mutable_fraction"]) for item in values if item.get("mutable_fraction") is not None
+    ]
+    outside = [
+        float(item["outside_change_ratio"]) for item in values if item.get("outside_change_ratio") is not None
+    ]
+    boundary = [
+        float(item["protected_boundary_change_ratio"])
+        for item in values
+        if item.get("protected_boundary_change_ratio") is not None
+    ]
     return {
         "source_rare_instances": source_instance_count,
         "planned_candidates": candidate_count,
@@ -410,7 +466,9 @@ def summarize(records, candidate_count, source_instance_count):
         "rejected": len(rejected),
         "errors": len(errors),
         "acceptance_rate": len(accepted) / len(values) if values else 0.0,
-        "per_class_generated_count": dict(sorted(Counter(item["category_name"] for item in accepted).items())),
+        "per_class_generated_count": dict(
+            sorted(Counter(item["category_name"] for item in accepted).items())
+        ),
         "mean_mutable_fraction": float(np.mean(mutables)) if mutables else None,
         "max_outside_change_ratio": max(outside, default=None),
         "max_boundary_change_ratio": max(boundary, default=None),
@@ -441,13 +499,26 @@ def exclusive_run(function):
             except BlockingIOError as error:
                 raise RuntimeError("Another generation process owns this output directory") from error
             return function(config, coco, rare_config, train_ids, image_dir, output_dir, qa_dir, **kwargs)
+
     return wrapped
 
 
 @exclusive_run
-def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir, qa_dir,
-                     backend=None, limit=None, num_workers=None, retry_errors=False,
-                     candidate_plan=None, strategy="a"):
+def run_augmentation(
+    config,
+    coco,
+    rare_config,
+    train_ids,
+    image_dir,
+    output_dir,
+    qa_dir,
+    backend=None,
+    limit=None,
+    num_workers=None,
+    retry_errors=False,
+    candidate_plan=None,
+    strategy="a",
+):
     validate_config(config)
     output_dir, qa_dir = Path(output_dir), Path(qa_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -461,33 +532,46 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
     config = copy.deepcopy(config)
     lora_path = config.get("generation", {}).get("lora_path")
     if lora_path:
-        weight = Path(lora_path) / config["generation"].get("lora_weight_name", "pytorch_lora_weights.safetensors")
+        weight = Path(lora_path) / config["generation"].get(
+            "lora_weight_name", "pytorch_lora_weights.safetensors"
+        )
         if not weight.is_file():
             raise FileNotFoundError(f"LoRA weights not found: {weight}")
         config["generation"]["lora_sha256"] = file_digest(weight)
     config["input_hashes"] = {
         str(im["id"]): file_digest(Path(image_dir) / im["file_name"])
-        for im in coco["images"] if im["id"] in train_ids
+        for im in coco["images"]
+        if im["id"] in train_ids
     }
     fingerprint = run_fingerprint(coco, candidates, stride, config)
     manifest_path = output_dir / "run_manifest.json"
     if manifest_path.exists() and json.loads(manifest_path.read_text())["fingerprint"] != fingerprint:
         raise ValueError("Source/configuration changed; use a new output directory")
-    _atomic_json(manifest_path, {"fingerprint": fingerprint, "config": config,
-                              "candidates": [c.__dict__ for c in candidates], "annotation_stride": stride})
+    _atomic_json(
+        manifest_path,
+        {
+            "fingerprint": fingerprint,
+            "config": config,
+            "candidates": [c.__dict__ for c in candidates],
+            "annotation_stride": stride,
+        },
+    )
     records = read_metadata(metadata_path)
     fingerprints = {item.get("run_fingerprint") for item in records}
     if fingerprints and fingerprints != {fingerprint}:
         raise ValueError("Existing metadata was created with a different source/configuration")
     previous = latest_metadata(records)
-    selected = candidates if limit is None else candidates[:int(limit)]
+    selected = candidates if limit is None else candidates[: int(limit)]
     pending = []
     for candidate in selected:
         prior = previous.get(candidate.sample_id)
         accepted_file_missing = (
-            prior is not None and prior["status"] == "accepted"
-            and (not (output_dir / prior["output_file"]).is_file()
-                 or file_digest(output_dir / prior["output_file"]) != prior.get("output_sha256"))
+            prior is not None
+            and prior["status"] == "accepted"
+            and (
+                not (output_dir / prior["output_file"]).is_file()
+                or file_digest(output_dir / prior["output_file"]) != prior.get("output_sha256")
+            )
         )
         if prior is None or accepted_file_missing or (prior["status"] == "error" and retry_errors):
             pending.append(candidate)
@@ -500,7 +584,10 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
         annotation_by_id[int(annotation["id"])] = annotation
     indices = {"images": images, "annotations": annotations, "annotation_by_id": annotation_by_id}
     workers = int(config.get("runtime", {}).get("num_workers", 0) if num_workers is None else num_workers)
-    prepare = lambda candidate: prepare_candidate(candidate, indices, image_dir, config)
+
+    def prepare(candidate):
+        return prepare_candidate(candidate, indices, image_dir, config)
+
     active_backend = backend
 
     for prepared in _ordered_prefetch(pending, prepare, workers):
@@ -521,27 +608,39 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
                 generation_config = dict(config["generation"])
                 revision_path = output_dir / "backend.json"
                 if revision_path.exists():
-                    generation_config["model_revision"] = json.loads(revision_path.read_text())["model_revision"]
-                active_backend = StableDiffusionInpaintingBackend(generation_config | {
-                    "negative_prompt": config["prompt"].get("negative_prompt")
-                })
+                    generation_config["model_revision"] = json.loads(revision_path.read_text())[
+                        "model_revision"
+                    ]
+                active_backend = StableDiffusionInpaintingBackend(
+                    generation_config | {"negative_prompt": config["prompt"].get("negative_prompt")}
+                )
                 record.update(active_backend.metadata)
                 _atomic_json(revision_path, active_backend.metadata)
             start = time.perf_counter()
-            generated_model = np.asarray(active_backend.generate(
-                Image.fromarray(prepared.model_image),
-                Image.fromarray(prepared.model_mask.astype(np.uint8) * 255),
-                record["prompt"], candidate.seed,
-            ).convert("RGB"), dtype=np.uint8)
+            generated_model = np.asarray(
+                active_backend.generate(
+                    Image.fromarray(prepared.model_image),
+                    Image.fromarray(prepared.model_mask.astype(np.uint8) * 255),
+                    record["prompt"],
+                    candidate.seed,
+                ).convert("RGB"),
+                dtype=np.uint8,
+            )
             record["generation_time_seconds"] = time.perf_counter() - start
             if generated_model.shape[:2] != prepared.model_image.shape[:2]:
                 raise ValueError("invalid_generated_crop_dimensions")
             generated_crop = prepared.transform.inverse_image(generated_model)
-            final = composite_masked(prepared.original, generated_crop, mask_result.safe_mask, prepared.transform)
+            final = composite_masked(
+                prepared.original, generated_crop, mask_result.safe_mask, prepared.transform
+            )
             boundary = mask_result.room_mask & ~mask_result.eroded_mask
             quality = evaluate_quality(
-                prepared.original, final, mask_result.safe_mask, boundary,
-                mask_result.dark_threshold, config["quality"],
+                prepared.original,
+                final,
+                mask_result.safe_mask,
+                boundary,
+                mask_result.dark_threshold,
+                config["quality"],
             )
             record.update(quality.metrics)
             record.update(
@@ -552,12 +651,18 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
             if quality.accepted:
                 saved = _save_png_atomic(output_dir / record["output_file"], final)
                 persisted_quality = evaluate_quality(
-                    prepared.original, saved, mask_result.safe_mask, boundary,
-                    mask_result.dark_threshold, config["quality"],
+                    prepared.original,
+                    saved,
+                    mask_result.safe_mask,
+                    boundary,
+                    mask_result.dark_threshold,
+                    config["quality"],
                 )
                 if not persisted_quality.accepted:
                     (output_dir / record["output_file"]).unlink(missing_ok=True)
-                    record.update(status="rejected", accepted=False, rejection_reason="persisted_output_failed_qc")
+                    record.update(
+                        status="rejected", accepted=False, rejection_reason="persisted_output_failed_qc"
+                    )
                 else:
                     record["output_sha256"] = file_digest(output_dir / record["output_file"])
             raw_path = qa_dir / "raw_generated" / f"{candidate.sample_id}.png"
@@ -570,8 +675,16 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
                 row_path,
                 prepared.original,
                 prepared.source_crop,
-                mask_result.room_mask[prepared.transform.y0:prepared.transform.y1, prepared.transform.x0:prepared.transform.x1] * 255,
-                mask_result.safe_mask[prepared.transform.y0:prepared.transform.y1, prepared.transform.x0:prepared.transform.x1] * 255,
+                mask_result.room_mask[
+                    prepared.transform.y0 : prepared.transform.y1,
+                    prepared.transform.x0 : prepared.transform.x1,
+                ]
+                * 255,
+                mask_result.safe_mask[
+                    prepared.transform.y0 : prepared.transform.y1,
+                    prepared.transform.x0 : prepared.transform.x1,
+                ]
+                * 255,
                 generated_model,
                 final,
                 record,
@@ -580,7 +693,8 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
             record.update(status="rejected", accepted=False, rejection_reason=str(error))
         except Exception as error:
             record.update(
-                status="error", accepted=False,
+                status="error",
+                accepted=False,
                 rejection_reason=f"{type(error).__name__}: {error}",
             )
         _append_jsonl(metadata_path, record)
@@ -588,14 +702,27 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
         print(f"{candidate.sample_id}: {record['status']} {record.get('rejection_reason') or ''}", flush=True)
 
     latest = list(latest_metadata(records).values())
-    diagnostic_filename = ("instances_train_aug_a.json" if strategy == "a" else
-                           "candidates_qc_passed.json" if strategy in {"lora_b", "lora_multi"} else
-                           "candidates_review_only.json")
-    build_augmented_coco(coco, train_ids, candidates, latest, image_dir, output_dir, stride,
-                         filename=diagnostic_filename,
-                         include_originals=strategy == "a")
+    diagnostic_filename = (
+        "instances_train_aug_a.json"
+        if strategy == "a"
+        else "candidates_qc_passed.json"
+        if strategy in {"lora_b", "lora_multi"}
+        else "candidates_review_only.json"
+    )
+    build_augmented_coco(
+        coco,
+        train_ids,
+        candidates,
+        latest,
+        image_dir,
+        output_dir,
+        stride,
+        filename=diagnostic_filename,
+        include_originals=strategy == "a",
+    )
     build_contact_sheets(
-        latest, qa_dir / "contact_sheets",
+        latest,
+        qa_dir / "contact_sheets",
         int(config.get("qa", {}).get("max_examples", 30)),
         int(config.get("qa", {}).get("rows_per_sheet", 5)),
     )
@@ -607,8 +734,14 @@ def run_augmentation(config, coco, rare_config, train_ids, image_dir, output_dir
 
 def validate_config(config):
     mask, crop = config["mask"], config["crop"]
-    numeric = [mask["erosion_fraction"], mask["min_erosion_px"], mask["max_erosion_px"],
-               mask["structure_dilation_px"], mask["min_mutable_fraction"], crop["context_fraction"]]
+    numeric = [
+        mask["erosion_fraction"],
+        mask["min_erosion_px"],
+        mask["max_erosion_px"],
+        mask["structure_dilation_px"],
+        mask["min_mutable_fraction"],
+        crop["context_fraction"],
+    ]
     if not np.isfinite(numeric).all() or min(numeric) < 0:
         raise ValueError("Mask/crop settings must be finite and nonnegative")
     if mask["min_erosion_px"] < 1 or mask["max_erosion_px"] < mask["min_erosion_px"]:
@@ -619,5 +752,7 @@ def validate_config(config):
         raise ValueError("Model resolution must be >=64 and divisible by 8")
     if config["generation"].get("variants_per_instance", 1) < 1:
         raise ValueError("variants_per_instance must be positive")
-    if not config["quality"].get("require_zero_outside_changes", True) or not config["quality"].get("require_zero_boundary_changes", True):
+    if not config["quality"].get("require_zero_outside_changes", True) or not config["quality"].get(
+        "require_zero_boundary_changes", True
+    ):
         raise ValueError("Exact structural invariance cannot be disabled")

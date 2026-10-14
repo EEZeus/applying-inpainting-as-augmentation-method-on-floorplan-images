@@ -1,5 +1,5 @@
 # OCR study: label-consistent common-to-rare synthesis (src/augmentation/text_relabel.py).
-# Fixed before any detector run; nothing here is tuned on validation or test plans.
+# Fixed before any detector run.
 seed: 3042
 
 dataset:
@@ -30,7 +30,7 @@ edit:
   min_erosion_px: 2
   max_erosion_px: 12
   erase_pad_fraction: 0.20
-  eraser: diffusion          # telea is the automatic fallback when the diffusion fill fails erase_qc
+  eraser: diffusion  # falls back to telea when erase_qc fails
   output_size: 512
   erase_prompt: >-
     clean empty area of a technical architectural floor plan drawing, plain flat background, no text

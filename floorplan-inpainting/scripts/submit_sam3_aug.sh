@@ -1,12 +1,5 @@
 #!/bin/bash
-# SAM 3 x best augmentation strategies. Run from the cluster checkout:
-#   cd /netscratch/espandar/inpainting/floorplan-inpainting && bash scripts/submit_sam3_aug.sh
-#
-#   prep  : build all 6 SAM3 datasets (fast, CPU-only, idempotent) so a dataset
-#           bug is caught before any GPU time
-#   smoke : task 0 (strategy_c_inpaint / multiclass) end to end
-#   full  : the 6-task array, afterok:smoke, %3
-#   collect: scores every finished SAM3 run (baseline + aug) -> outputs/final/sam3/
+# SAM 3 x augmentation chain: build the 6 datasets (CPU) -> smoke -> 6-task array -> collect.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "${HERE}"

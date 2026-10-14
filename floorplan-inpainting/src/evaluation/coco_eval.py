@@ -17,8 +17,7 @@ def output_to_coco(image_id, output, score_threshold=0.0):
         x1, y1, x2, y2 = map(float, box)
         common = {"image_id": image_id, "category_id": int(label), "score": score}
         bbox_results.append({**common, "bbox": [x1, y1, x2 - x1, y2 - y1]})
-        # Transfer and encode one mask at a time. Keeping all float masks for
-        # several multi-megapixel images can otherwise consume tens of GB.
+        # One mask at a time: all float masks of several large plans can take tens of GB.
         binary = np.asfortranarray((mask[0].detach().cpu().numpy() >= 0.5).astype(np.uint8))
         rle = mask_utils.encode(binary)
         rle["counts"] = rle["counts"].decode("ascii")
@@ -30,7 +29,8 @@ def predictions_to_coco(predictions, score_threshold=0.0):
     bbox_results, mask_results = [], []
     for image_id, output in predictions:
         boxes, masks = output_to_coco(image_id, output, score_threshold)
-        bbox_results.extend(boxes); mask_results.extend(masks)
+        bbox_results.extend(boxes)
+        mask_results.extend(masks)
     return bbox_results, mask_results
 
 
@@ -43,7 +43,9 @@ def _evaluate(coco_gt, results, image_ids, iou_type, category_ids=None):
     if category_ids is not None:
         evaluator.params.catIds = list(category_ids)
     with contextlib.redirect_stdout(io.StringIO()):
-        evaluator.evaluate(); evaluator.accumulate(); evaluator.summarize()
+        evaluator.evaluate()
+        evaluator.accumulate()
+        evaluator.summarize()
     return evaluator
 
 
@@ -51,10 +53,16 @@ def evaluate_coco_results(annotation_file, bbox, masks, image_ids, return_evalua
     coco_gt = COCO(str(annotation_file))
     bbox_eval = _evaluate(coco_gt, bbox, image_ids, "bbox")
     mask_eval = _evaluate(coco_gt, masks, image_ids, "segm")
+
     def metrics(evaluator):
         if evaluator is None:
             return {"AP": 0.0, "AP50": 0.0, "AP75": 0.0}
-        return {"AP": float(evaluator.stats[0]), "AP50": float(evaluator.stats[1]), "AP75": float(evaluator.stats[2])}
+        return {
+            "AP": float(evaluator.stats[0]),
+            "AP50": float(evaluator.stats[1]),
+            "AP75": float(evaluator.stats[2]),
+        }
+
     result = ({"bbox": metrics(bbox_eval), "mask": metrics(mask_eval)}, (bbox, masks), coco_gt)
     if return_evaluators:
         return (*result, {"bbox": bbox_eval, "mask": mask_eval})
@@ -69,11 +77,16 @@ def evaluate_coco(annotation_file, predictions, image_ids, score_threshold=0.0):
 
 def compact_predictions(bbox_results, mask_results, score_threshold=0.5, image_ids=None):
     """Create visualization records containing RLEs rather than dense masks."""
-    grouped = {image_id: {"boxes": [], "labels": [], "scores": [], "segmentations": []} for image_id in (image_ids or [])}
+    grouped = {
+        image_id: {"boxes": [], "labels": [], "scores": [], "segmentations": []}
+        for image_id in (image_ids or [])
+    }
     for bbox, mask in zip(bbox_results, mask_results):
         if bbox["score"] < score_threshold:
             continue
-        item = grouped.setdefault(bbox["image_id"], {"boxes": [], "labels": [], "scores": [], "segmentations": []})
+        item = grouped.setdefault(
+            bbox["image_id"], {"boxes": [], "labels": [], "scores": [], "segmentations": []}
+        )
         x, y, width, height = bbox["bbox"]
         item["boxes"].append([x, y, x + width, y + height])
         item["labels"].append(bbox["category_id"])

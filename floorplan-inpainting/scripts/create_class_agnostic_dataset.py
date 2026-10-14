@@ -36,7 +36,11 @@ def main():
         }
         for name, ids in partitions.items()
     }
-    print(json.dumps({"output": str(output_path), "categories": converted["categories"], "splits": counts}, indent=2))
+    print(
+        json.dumps(
+            {"output": str(output_path), "categories": converted["categories"], "splits": counts}, indent=2
+        )
+    )
 
 
 if __name__ == "__main__":

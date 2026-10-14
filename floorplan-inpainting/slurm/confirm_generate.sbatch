@@ -1,7 +1,6 @@
 #!/bin/bash
-# Generate C2-wide at each piloted strength on all planned candidates, pick the
-# strength by the pre-registered generation-only rule, and build the matched
-# e16/e17 multi-room datasets from the pairs accepted in both modes.
+# Generate C2-wide at each piloted strength, pick one by the pre-registered rule,
+# and build the matched e16/e17 datasets from pairs accepted in both modes.
 #SBATCH --job-name=fp-confirm-generate
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6

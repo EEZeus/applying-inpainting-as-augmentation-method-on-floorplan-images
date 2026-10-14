@@ -1,8 +1,6 @@
 #!/bin/bash
-# Follow-up chain (docs/preregistration_followup.md):
-#   balance_generate[b20,b50,b100] -> { balance_ocr -> followup_diag,
-#                                       train smoke (e21-e24, 1 epoch) -> train full (4 arms x 12 seeds) } -> analyze
-#   bash scripts/submit_followup.sh
+# Follow-up chain (docs/preregistration_followup.md): balanced datasets -> OCR diagnostics and
+# e21-e24 training (smoke, then 4 arms x 12 seeds) -> analyze.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "${HERE}"

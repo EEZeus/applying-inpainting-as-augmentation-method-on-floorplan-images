@@ -17,7 +17,9 @@ def make_class_agnostic_coco(coco, category_id=1, category_name="room"):
         **output.get("info", {}),
         "class_agnostic": True,
         "source_categories": copy.deepcopy(coco["categories"]),
-        "description": "Class-agnostic room-instance segmentation derived from the deduplicated Phase 1 COCO dataset",
+        "description": (
+            "Class-agnostic room-instance segmentation derived from the deduplicated Phase 1 COCO dataset"
+        ),
     }
     return output
 

@@ -3,6 +3,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from src.augmentation.inputs import load_inputs
@@ -11,7 +12,9 @@ from src.augmentation.validation import validate_full_provenance
 from src.utils.config import load_yaml, resolve_path
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Validate COCO files, polygons, IDs, files, and train provenance")
+    parser = argparse.ArgumentParser(
+        description="Validate COCO files, polygons, IDs, files, and train provenance"
+    )
     parser.add_argument("annotations")
     args = parser.parse_args()
     source, _, train, image_dir = load_inputs(load_yaml(resolve_path("configs/augmentation_a.yaml")))

@@ -4,6 +4,7 @@ Welch's t-test with the t distribution evaluated through the regularised
 incomplete beta function, a Monte Carlo permutation test, Holm's step-down
 adjustment, percentile intervals and Hedges' g.
 """
+
 import math
 
 import numpy as np
@@ -42,8 +43,7 @@ def betainc(a, b, x):
         return 0.0
     if x >= 1.0:
         return 1.0
-    log_front = (math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
-                 + a * math.log(x) + b * math.log1p(-x))
+    log_front = math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x)
     front = math.exp(log_front)
     if x < (a + 1.0) / (a + b + 2.0):
         return front * _betacf(a, b, x) / a
@@ -62,16 +62,24 @@ def welch(control, treatment):
     """One-sided Welch test of mean(treatment) > mean(control)."""
     a, b = np.asarray(control, float), np.asarray(treatment, float)
     if len(a) < 2 or len(b) < 2:
-        return {"t": None, "df": None, "p_one_sided": None, "delta": float(b.mean() - a.mean())
-                if len(a) and len(b) else None}
+        return {
+            "t": None,
+            "df": None,
+            "p_one_sided": None,
+            "delta": float(b.mean() - a.mean()) if len(a) and len(b) else None,
+        }
     va, vb = a.var(ddof=1) / len(a), b.var(ddof=1) / len(b)
     delta = float(b.mean() - a.mean())
     se = math.sqrt(va + vb)
     if se == 0:
-        return {"t": math.inf if delta > 0 else -math.inf, "df": None,
-                "p_one_sided": 0.0 if delta > 0 else 1.0, "delta": delta}
+        return {
+            "t": math.inf if delta > 0 else -math.inf,
+            "df": None,
+            "p_one_sided": 0.0 if delta > 0 else 1.0,
+            "delta": delta,
+        }
     t = delta / se
-    df = (va + vb) ** 2 / ((va ** 2) / (len(a) - 1) + (vb ** 2) / (len(b) - 1))
+    df = (va + vb) ** 2 / ((va**2) / (len(a) - 1) + (vb**2) / (len(b) - 1))
     return {"t": t, "df": df, "p_one_sided": t_sf(t, df), "delta": delta, "se": se}
 
 
@@ -89,7 +97,7 @@ def permutation_test(control, treatment, n_permutations=200_000, seed=20261006):
         keys = rng.random((size, len(pooled)))
         order = np.argsort(keys, axis=1)
         shuffled = pooled[order]
-        stats = shuffled[:, len(a):].mean(1) - shuffled[:, :len(a)].mean(1)
+        stats = shuffled[:, len(a) :].mean(1) - shuffled[:, : len(a)].mean(1)
         count += int(np.sum(stats >= observed - 1e-12))
         done += size
     return (count + 1) / (n_permutations + 1)
@@ -136,12 +144,31 @@ def paired_t(control, treatment):
     diff = b - a
     n = len(diff)
     if n < 2:
-        return {"n": n, "delta": float(diff.mean()) if n else None, "t": None, "df": None, "p_one_sided": None}
+        return {
+            "n": n,
+            "delta": float(diff.mean()) if n else None,
+            "t": None,
+            "df": None,
+            "p_one_sided": None,
+        }
     sd = float(diff.std(ddof=1))
     delta = float(diff.mean())
     if sd == 0:
-        return {"n": n, "delta": delta, "sd_diff": 0.0, "t": math.inf if delta > 0 else -math.inf,
-                "df": n - 1, "p_one_sided": 0.0 if delta > 0 else 1.0}
+        return {
+            "n": n,
+            "delta": delta,
+            "sd_diff": 0.0,
+            "t": math.inf if delta > 0 else -math.inf,
+            "df": n - 1,
+            "p_one_sided": 0.0 if delta > 0 else 1.0,
+        }
     t = delta / (sd / math.sqrt(n))
-    return {"n": n, "delta": delta, "sd_diff": sd, "t": t, "df": n - 1, "p_one_sided": t_sf(t, n - 1),
-            "dz": delta / sd}
+    return {
+        "n": n,
+        "delta": delta,
+        "sd_diff": sd,
+        "t": t,
+        "df": n - 1,
+        "p_one_sided": t_sf(t, n - 1),
+        "dz": delta / sd,
+    }

@@ -8,15 +8,16 @@ Two tasks:
                      class-agnostic test dump). No labels; detection score and
                      the raw RLE are carried through for the two-stage eval.
 
-Feature per crop = [CLS token ; mean of patch tokens]  (1536-d for dinov2-base).
+Feature per crop = [CLS token ; mean of patch tokens] (1536-d for dinov2-base).
 Crop = annotation/detection bbox expanded by --context * max(w,h) each side,
 clamped, padded to a white square, then the HF image processor resizes to 224.
 
 Output .npz: features[N,D] float32, labels[N] int (-1 for proposals),
-image_ids[N] int, ann_ids[N] int (annotation id, or detection index),
+image_ids[N] int, keys[N] int (annotation id, or detection index),
 scores[N] float32 (1.0 for gt). For --task proposals a companion
 <out>.dets.json holds the kept detections in npz-row order.
 """
+
 import argparse
 import json
 import sys
@@ -31,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _load_dino(model_name, device):
     from transformers import AutoImageProcessor, AutoModel
+
     proc = AutoImageProcessor.from_pretrained(model_name)
     model = AutoModel.from_pretrained(model_name).to(device).eval()
     return proc, model
@@ -138,8 +140,16 @@ def main():
                 continue
             if iid not in img_by_id:
                 continue
-            records.append((img_by_id[iid]["file_name"], [float(v) for v in a["bbox"]],
-                            int(a["category_id"]), iid, int(a["id"]), 1.0))
+            records.append(
+                (
+                    img_by_id[iid]["file_name"],
+                    [float(v) for v in a["bbox"]],
+                    int(a["category_id"]),
+                    iid,
+                    int(a["id"]),
+                    1.0,
+                )
+            )
     else:
         dets = json.loads(Path(args.pred_json).read_text(encoding="utf-8"))
         for k, d in enumerate(dets):
@@ -148,9 +158,17 @@ def main():
             iid = int(d["image_id"])
             if iid not in img_by_id:
                 continue
-            records.append((img_by_id[iid]["file_name"], [float(v) for v in d["bbox"]],
-                            -1, iid, k, float(d.get("score", 1.0))))
-    # stable order by image then key -> lets _run reuse the open image
+            records.append(
+                (
+                    img_by_id[iid]["file_name"],
+                    [float(v) for v in d["bbox"]],
+                    -1,
+                    iid,
+                    k,
+                    float(d.get("score", 1.0)),
+                )
+            )
+    # sort by image so _run can reuse the open image
     records.sort(key=lambda r: (r[0], r[4]))
     if args.limit:
         records = records[: args.limit]
@@ -166,18 +184,34 @@ def main():
     scores = np.array([r[5] for r in kept], dtype=np.float32)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(out, features=features, labels=labels, image_ids=image_ids,
-             keys=keys, scores=scores, model=args.model, context=args.context)
+    np.savez(
+        out,
+        features=features,
+        labels=labels,
+        image_ids=image_ids,
+        keys=keys,
+        scores=scores,
+        model=args.model,
+        context=args.context,
+    )
 
     if args.task == "proposals":
         dets = json.loads(Path(args.pred_json).read_text(encoding="utf-8"))
         ordered = [dets[int(k)] for k in keys]
         Path(args.dets_out).write_text(json.dumps(ordered), encoding="utf-8")
 
-    print(json.dumps({"out": str(out), "task": args.task, "n": int(features.shape[0]),
-                      "dim": int(features.shape[1]),
-                      "label_dist": {int(k): int(v) for k, v in
-                                     zip(*np.unique(labels, return_counts=True))}}, indent=2))
+    print(
+        json.dumps(
+            {
+                "out": str(out),
+                "task": args.task,
+                "n": int(features.shape[0]),
+                "dim": int(features.shape[1]),
+                "label_dist": {int(k): int(v) for k, v in zip(*np.unique(labels, return_counts=True))},
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

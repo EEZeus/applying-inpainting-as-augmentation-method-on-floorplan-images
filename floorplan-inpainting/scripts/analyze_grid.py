@@ -9,10 +9,10 @@ Reads result.json written by scripts/run_experiment.py for every
 Image-level bootstrap CIs are produced by a later stage (scripts/eval_bootstrap.py),
 which re-loads checkpoints; this script only needs the finished result.json files.
 """
+
 import argparse
 import csv
 import json
-import math
 import statistics
 import sys
 from pathlib import Path
@@ -23,20 +23,20 @@ SEEDS = (42, 123, 2026)
 
 # arm id -> (output_root, human label). Order is the report order.
 ARMS = [
-    ("e0",  "outputs/experiments",          "Original (no aug)"),
-    ("e1",  "outputs/experiments",          "Rare-weighted sampling"),
-    ("e2",  "outputs/experiments",          "Strategy A"),
-    ("e3",  "outputs/experiments",          "Strategy A + weighting"),
-    ("e4",  "outputs/experiments",          "Strategy A + crops"),
-    ("e5",  "outputs/experiments",          "Strategy A + crops + weighting"),
-    ("e6",  "outputs/experiments",          "Strategy B"),
-    ("e7",  "outputs/experiments",          "Strategy B + weighting"),
-    ("e8",  "outputs/experiments_c_multi",  "Strategy C copy-paste"),
-    ("e9",  "outputs/experiments_c_multi",  "Strategy C feather-blend"),
-    ("e10", "outputs/experiments_c_multi",  "Strategy C diffusion inpaint"),
-    ("e11", "outputs/experiments_c_multi",  "Strategy C diffusion inpaint + weighting"),
-    ("e12", "outputs/experiments_lora",     "LoRA Strategy B"),
-    ("e13", "outputs/experiments_lora",     "LoRA Strategy B + weighting"),
+    ("e0", "outputs/experiments", "Original (no aug)"),
+    ("e1", "outputs/experiments", "Rare-weighted sampling"),
+    ("e2", "outputs/experiments", "Strategy A"),
+    ("e3", "outputs/experiments", "Strategy A + weighting"),
+    ("e4", "outputs/experiments", "Strategy A + crops"),
+    ("e5", "outputs/experiments", "Strategy A + crops + weighting"),
+    ("e6", "outputs/experiments", "Strategy B"),
+    ("e7", "outputs/experiments", "Strategy B + weighting"),
+    ("e8", "outputs/experiments_c_multi", "Strategy C copy-paste"),
+    ("e9", "outputs/experiments_c_multi", "Strategy C feather-blend"),
+    ("e10", "outputs/experiments_c_multi", "Strategy C diffusion inpaint"),
+    ("e11", "outputs/experiments_c_multi", "Strategy C diffusion inpaint + weighting"),
+    ("e12", "outputs/experiments_lora", "LoRA Strategy B"),
+    ("e13", "outputs/experiments_lora", "LoRA Strategy B + weighting"),
 ]
 
 BASELINE = "e0"
@@ -73,20 +73,25 @@ def _wilcoxon(paired_arm, paired_base):
     """Paired Wilcoxon signed-rank vs baseline. Falls back to a sign test."""
     diffs = [a - b for a, b in zip(paired_arm, paired_base) if a is not None and b is not None]
     if len(diffs) < 1 or all(d == 0 for d in diffs):
-        return {"test": "none", "n_pairs": len(diffs), "p_value": None,
-                "mean_delta": statistics.fmean(diffs) if diffs else None}
+        return {
+            "test": "none",
+            "n_pairs": len(diffs),
+            "p_value": None,
+            "mean_delta": statistics.fmean(diffs) if diffs else None,
+        }
     result = {"n_pairs": len(diffs), "mean_delta": statistics.fmean(diffs)}
     try:
         from scipy.stats import wilcoxon
-        stat, p = wilcoxon(diffs, zero_method="wilcox", alternative="two-sided",
-                           mode="auto")
+
+        stat, p = wilcoxon(diffs, zero_method="wilcox", alternative="two-sided", mode="auto")
         result.update({"test": "wilcoxon", "statistic": float(stat), "p_value": float(p)})
     except Exception:
         pos = sum(1 for d in diffs if d > 0)
         n = sum(1 for d in diffs if d != 0)
         # two-sided exact sign test
         from math import comb
-        tail = sum(comb(n, k) for k in range(0, min(pos, n - pos) + 1)) / (2 ** n)
+
+        tail = sum(comb(n, k) for k in range(0, min(pos, n - pos) + 1)) / (2**n)
         result.update({"test": "sign", "n_positive": pos, "p_value": min(1.0, 2 * tail)})
     return result
 
@@ -120,11 +125,14 @@ def main():
                     per_seed[seed] = _metrics(json.loads(p.read_text()), track)
 
             keys = ["overall_mask_AP", "overall_bbox_AP"] + (
-                ["rare_mask_AP"] if track == "multiclass" else [])
+                ["rare_mask_AP"] if track == "multiclass" else []
+            )
             agg = {k: _agg([per_seed.get(s, {}).get(k) for s in SEEDS]) for k in keys}
 
             entry = {
-                "arm": arm, "track": track, "label": label,
+                "arm": arm,
+                "track": track,
+                "label": label,
                 "seeds_done": sorted(per_seed),
                 "missing_seeds": [s for s in SEEDS if s not in per_seed],
                 "aggregate": agg,
@@ -135,13 +143,18 @@ def main():
                 entry["paired_vs_e0"] = {
                     "metric": primary,
                     "seeds": shared,
-                    **_wilcoxon([per_seed[s][primary] for s in shared],
-                                [base_by_seed[s][primary] for s in shared]),
+                    **_wilcoxon(
+                        [per_seed[s][primary] for s in shared], [base_by_seed[s][primary] for s in shared]
+                    ),
                 }
             report["arms"].append(entry)
 
-            row = {"track": track, "arm": arm, "label": label,
-                   "seeds_done": ";".join(map(str, sorted(per_seed)))}
+            row = {
+                "track": track,
+                "arm": arm,
+                "label": label,
+                "seeds_done": ";".join(map(str, sorted(per_seed))),
+            }
             for k in keys:
                 row[f"{k}_mean"] = agg[k]["mean"]
                 row[f"{k}_std"] = agg[k]["std"]

@@ -1,9 +1,6 @@
 #!/bin/bash
-# OCR study (docs/preregistration_ocr.md): full dependency chain.
-#   ocr_original -> { ocr_diag, text_relabel_generate -> text_relabel_finish
-#                     -> train smoke (e18/e19/e20, 1 epoch) -> train full (3 arms x 12 seeds) -> analyze }
-# Run from the cluster project dir after scripts/setup_ocr_env.sh:
-#   bash scripts/submit_ocr_study.sh
+# OCR study chain (docs/preregistration_ocr.md): OCR -> diagnostics and relabel data -> e18-e20
+# training (smoke, then 3 arms x 12 seeds) -> analyze. Run scripts/setup_ocr_env.sh first.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 cd "${HERE}"

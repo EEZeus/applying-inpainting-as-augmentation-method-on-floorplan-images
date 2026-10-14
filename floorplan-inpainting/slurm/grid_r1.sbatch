@@ -1,23 +1,14 @@
 #!/bin/bash
-# Round-1 experiment grid: Mask R-CNN downstream, existing augmentation arms.
-# seed 42 is already complete for all 14 arms x 2 tracks (read from disk by
-# scripts/analyze_grid.py); this array fills the 2 new seeds:
-#   seeds {123,2026} x tracks {multiclass,agnostic} x 14 configs = 56 tasks.
-# No new pipeline code: every config + augmented dataset already exists.
-# Small-GPU partitions only (batch 1 Mask R-CNN peaks well under 24 GB); the
-# 80 GB tier is intentionally excluded so tasks are not stuck behind SAM3-class
-# queues.
+# Round-1 Mask R-CNN grid: seeds {123,2026} x {multiclass,agnostic} x 14 configs = 56 tasks.
+# Seed 42 already exists and is read from disk by scripts/analyze_grid.py.
 #SBATCH --job-name=fp-grid-r1
 #SBATCH --array=0-55%16
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6
-# 32G OOM-killed the augmented-data arms (e6/e7/e9/e10/e11/e12/e13) mid-run;
-# seed_42 used 48G. 64G gives headroom (these nodes have 480G+).
+# 32G OOM-killed the augmented-data arms; seed 42 used 48G.
 #SBATCH --mem=64G
 #SBATCH --time=16:00:00
 #SBATCH --output=outputs/logs/grid-r1-%A_%a.out
-# Broad node pool for throughput. V100-32GB nodes ran ~8x slower here, but the
-# 16 h walltime absorbs that and Slurm prefers faster free nodes anyway.
 #SBATCH --partition=L40S,L40S-DSA,V100-32GB,RTX3090,A100-40GB,A100-80GB,A100-RP,A100-PCI,RTXA6000,H100,H100-PCI,H100-RP,batch
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
@@ -27,7 +18,7 @@ export OMP_NUM_THREADS=2
 
 PY=/netscratch/espandar/miniconda3/envs/inpainting/bin/python
 
-# 14 configs, index order is fixed and must not be reordered (task ids encode it).
+# Task ids encode this order; do not reorder.
 CONFIGS=(
   configs/experiments/e0_original.yaml
   configs/experiments/e1_oversampling.yaml

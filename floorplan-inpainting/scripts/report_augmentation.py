@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Write before/after class occurrences and bounded sampling diagnostics."""
+
 import json
 import sys
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from src.augmentation.inputs import load_inputs, original_train
@@ -24,9 +26,13 @@ def main():
         if path.exists():
             datasets[name] = json.loads(path.read_text())
     cfg = load_yaml(resolve_path("configs/rare_sampling.yaml"))["sampling"]
-    rare_ids = {int(cid) for cid, value in rare["categories"].items() if value["role"] in cfg["include_roles"]}
-    for name, data in [("sampling_weights", datasets.get("Strategy A full", original)),
-                       ("sampling_weights_original", original)]:
+    rare_ids = {
+        int(cid) for cid, value in rare["categories"].items() if value["role"] in cfg["include_roles"]
+    }
+    for name, data in [
+        ("sampling_weights", datasets.get("Strategy A full", original)),
+        ("sampling_weights_original", original),
+    ]:
         _, rows = sampling_weights(data, original, rare_ids, cfg)
         write_sampling_report(resolve_path(f"outputs/augmentation_a/{name}.csv"), rows)
     class_count_report(resolve_path("outputs/augmentation_a/class_counts.csv"), original, datasets)

@@ -14,10 +14,12 @@ def test_per_class_metrics_are_extracted_from_accumulated_precision():
         params=SimpleNamespace(catIds=[1, 2], iouThrs=np.array([0.5, 0.75])),
         eval={"precision": precision},
     )
-    coco = SimpleNamespace(dataset={
-        "categories": [{"id": 1, "name": "one"}, {"id": 2, "name": "two"}, {"id": 3, "name": "empty"}],
-        "annotations": [{"image_id": 7, "category_id": 1}, {"image_id": 7, "category_id": 2}],
-    })
+    coco = SimpleNamespace(
+        dataset={
+            "categories": [{"id": 1, "name": "one"}, {"id": 2, "name": "two"}, {"id": 3, "name": "empty"}],
+            "annotations": [{"image_id": 7, "category_id": 1}, {"image_id": 7, "category_id": 2}],
+        }
+    )
     rows = per_class_mask_metrics(coco, evaluator, [7])
     assert np.isclose(rows[0]["mask_AP"], 0.5)
     assert np.isclose(rows[0]["mask_AP50"], 0.4)
@@ -27,14 +29,20 @@ def test_per_class_metrics_are_extracted_from_accumulated_precision():
 
 def test_rare_aggregate_uses_primary_support_and_reports_weighted_secondary():
     rows = [
-        {"category_id": 11, "test_instances": 1, "mask_AP": .2, "mask_AP50": .4},
-        {"category_id": 12, "test_instances": 3, "mask_AP": .6, "mask_AP50": .8},
-        {"category_id": 17, "test_instances": 2, "mask_AP": 1., "mask_AP50": 1.},
+        {"category_id": 11, "test_instances": 1, "mask_AP": 0.2, "mask_AP50": 0.4},
+        {"category_id": 12, "test_instances": 3, "mask_AP": 0.6, "mask_AP50": 0.8},
+        {"category_id": 17, "test_instances": 2, "mask_AP": 1.0, "mask_AP50": 1.0},
         {"category_id": 16, "test_instances": 0, "mask_AP": None, "mask_AP50": None},
     ]
-    config = {"categories": {11: {"role": "primary_rare"}, 12: {"role": "primary_rare"},
-                              16: {"role": "primary_rare"}, 17: {"role": "low_support"}}}
+    config = {
+        "categories": {
+            11: {"role": "primary_rare"},
+            12: {"role": "primary_rare"},
+            16: {"role": "primary_rare"},
+            17: {"role": "low_support"},
+        }
+    }
     metrics = rare_aggregate_metrics(rows, config)
-    assert np.isclose(metrics["rare_mask_AP"], .4)
-    assert np.isclose(metrics["weighted_rare_mask_AP"], .5)
+    assert np.isclose(metrics["rare_mask_AP"], 0.4)
+    assert np.isclose(metrics["weighted_rare_mask_AP"], 0.5)
     assert metrics["rare_evaluable_classes"] == 2 and metrics["rare_test_instances"] == 4

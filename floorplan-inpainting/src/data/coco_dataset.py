@@ -31,7 +31,9 @@ class FloorplanCocoDataset(Dataset):
             raise ValueError("COCO dataset must define at least one foreground category")
         expected = list(range(1, len(category_ids) + 1))
         if category_ids != expected:
-            raise ValueError(f"Expected contiguous foreground category IDs 1..{len(category_ids)}, found {category_ids}")
+            raise ValueError(
+                f"Expected contiguous foreground category IDs 1..{len(category_ids)}, found {category_ids}"
+            )
 
     def __len__(self):
         return len(self.images)
@@ -92,5 +94,8 @@ def read_split(path):
 def ocr_target_fields(provider, file_name, width, height):
     """Private target keys holding the OCR label tokens of one plan."""
     boxes, feats, conf = provider.get(file_name, width, height)
-    return {"_ocr_boxes": torch.from_numpy(boxes), "_ocr_feats": torch.from_numpy(feats),
-            "_ocr_conf": torch.from_numpy(conf)}
+    return {
+        "_ocr_boxes": torch.from_numpy(boxes),
+        "_ocr_feats": torch.from_numpy(feats),
+        "_ocr_conf": torch.from_numpy(conf),
+    }

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import pytest
 
 pytest.importorskip("torch")
@@ -14,8 +15,12 @@ pytestmark = pytest.mark.skipif(
 
 
 def dataset():
-    return FloorplanCocoDataset(ROOT.parent / "area_segmentation_coco/images",
-        ROOT / "data/processed/instances_deduplicated.json", read_split(ROOT / "data/splits/train.txt"), DetectionTransform())
+    return FloorplanCocoDataset(
+        ROOT.parent / "area_segmentation_coco/images",
+        ROOT / "data/processed/instances_deduplicated.json",
+        read_split(ROOT / "data/splits/train.txt"),
+        DetectionTransform(),
+    )
 
 
 def test_dataset_item_fields_and_alignment():

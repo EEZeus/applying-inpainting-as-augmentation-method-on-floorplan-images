@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate isolated Strategy C control and exemplar-inpainting datasets."""
+
 import argparse
 import json
 import sys
@@ -35,8 +36,9 @@ def main():
         config["crop"]["output_size"] = args.resolution
     if args.strength is not None:
         config["generation"]["strength"] = float(args.strength)
-    config["generation"]["cache_dir"] = str(resolve_path(
-        args.model_cache or config["generation"]["cache_dir"]))
+    config["generation"]["cache_dir"] = str(
+        resolve_path(args.model_cache or config["generation"]["cache_dir"])
+    )
     coco, rare, train, image_dir = load_inputs(config)
     modes = list(MODES) if args.mode == "all" else [args.mode]
     dataset_root = resolve_path(args.dataset_root or config["output"]["dataset_root"])
@@ -51,9 +53,18 @@ def main():
             continue
         seed_everything(int(config["seed"]))
         results[mode] = run_strategy_c(
-            config, coco, rare, train, image_dir, output_dir, qa_dir, mode,
-            limit=args.limit, num_workers=args.num_workers,
-            retry_errors=args.retry_errors)
+            config,
+            coco,
+            rare,
+            train,
+            image_dir,
+            output_dir,
+            qa_dir,
+            mode,
+            limit=args.limit,
+            num_workers=args.num_workers,
+            retry_errors=args.retry_errors,
+        )
     print(json.dumps(results, ensure_ascii=False, indent=2))
     if any(value.get("errors", 0) for value in results.values()):
         raise SystemExit(1)

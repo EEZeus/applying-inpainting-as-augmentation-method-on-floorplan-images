@@ -1,6 +1,5 @@
 #!/bin/bash
-# OCR study, stage 4 data: OCR-verify each edit, compose the synthetic plans,
-# then OCR + embed the synthetic plans for the text-aware model.
+# OCR study data: OCR-verify each edit, compose the synthetic plans, then OCR and embed them.
 #SBATCH --job-name=fp-text-finish
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6

@@ -1,9 +1,13 @@
 import pytest
-np = pytest.importorskip("numpy")
+
+pytest.importorskip("numpy")
 pytest.importorskip("cv2")
-from src.data.coco_dataset import FloorplanCocoDataset
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
+import numpy as np
+import torch
 from pycocotools import mask as mask_utils
+
+from src.data.coco_dataset import FloorplanCocoDataset
 from src.evaluation.coco_eval import compact_predictions, output_to_coco
 
 
@@ -25,9 +29,9 @@ def test_predictions_are_compacted_to_rle():
         "boxes": torch.tensor([[2.0, 3.0, 8.0, 10.0]]),
         "labels": torch.tensor([12]),
         "scores": torch.tensor([0.9]),
-        "masks": torch.from_numpy(FloorplanCocoDataset.rasterize(
-            [[2, 3, 7, 3, 7, 9, 2, 9]], 12, 12
-        )).float()[None, None],
+        "masks": torch.from_numpy(FloorplanCocoDataset.rasterize([[2, 3, 7, 3, 7, 9, 2, 9]], 12, 12)).float()[
+            None, None
+        ],
     }
     boxes, masks = output_to_coco(7, output)
     assert "counts" in masks[0]["segmentation"]

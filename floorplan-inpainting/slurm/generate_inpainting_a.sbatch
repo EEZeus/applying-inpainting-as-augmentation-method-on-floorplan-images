@@ -10,8 +10,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 export PYTHONPATH="$PWD:${PYTHONPATH:-}"
 
-# Override these when submitting, for example:
-# NUM_WORKERS=4 OUTPUT_DIR=/scratch/run sbatch slurm/generate_inpainting_a.sbatch
+# Override on submission, e.g. NUM_WORKERS=4 OUTPUT_DIR=/scratch/run sbatch ...
 NUM_WORKERS="${NUM_WORKERS:-2}"
 RESOLUTION="${RESOLUTION:-512}"
 MODEL_CACHE="${MODEL_CACHE:-$PWD/data/cache/huggingface}"
@@ -25,7 +24,7 @@ mkdir -p "$MODEL_CACHE" "$OUTPUT_DIR" outputs/logs
 "$CONDA_EXE" run --no-capture-output -n "$CONDA_ENV" \
     python -c "import torch, diffusers; print('GPU:', torch.cuda.get_device_name(0)); print('Diffusers:', diffusers.__version__)"
 
-# A successful smoke sample is resumable and will be skipped by the full run.
+# The smoke sample is reused by the full run.
 "$CONDA_EXE" run --no-capture-output -n "$CONDA_ENV" \
     python scripts/generate_inpainting_a.py \
         --config configs/augmentation_a.yaml \

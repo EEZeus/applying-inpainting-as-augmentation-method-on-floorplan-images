@@ -19,7 +19,9 @@ def save_qa_row(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     x0, y0, x1, y1 = record["crop_bbox"]
-    difference = np.abs(original_full[y0:y1, x0:x1].astype(np.int16) - final_full[y0:y1, x0:x1].astype(np.int16))
+    difference = np.abs(
+        original_full[y0:y1, x0:x1].astype(np.int16) - final_full[y0:y1, x0:x1].astype(np.int16)
+    )
     difference = np.clip(difference * 4, 0, 255).astype(np.uint8)
     panels = [
         (original_full, "Original full plan", None),
@@ -70,7 +72,7 @@ def build_contact_sheets(records, output_dir, maximum=30, rows_per_sheet=5):
     selected = _stratified_rows(records, maximum)
     paths = []
     for sheet_index in range(0, len(selected), rows_per_sheet):
-        batch = selected[sheet_index:sheet_index + rows_per_sheet]
+        batch = selected[sheet_index : sheet_index + rows_per_sheet]
         images = [Image.open(record["qa_row_path"]).convert("RGB") for record in batch]
         width = max(image.width for image in images)
         height = sum(image.height for image in images)

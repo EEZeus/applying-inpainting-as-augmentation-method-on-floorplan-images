@@ -3,17 +3,15 @@
 For every RoI the OCR label tokens whose centre lies inside the proposal box
 are pooled (confidence-weighted mean of their features, max of their
 class-name similarities, a has-text flag and log token count). An MLP maps
-this to the 1024-d box representation and the result is *added* to the box
-feature that feeds ``cls_score`` only; box regression and the mask branch are
-unchanged. The MLP's last layer starts at zero, so at initialisation the
-model is exactly the plain Mask R-CNN.
+this to the box representation and adds it to the input of ``cls_score`` only;
+box regression and the mask branch are unchanged. The MLP's last layer is
+zero-initialised, so training starts from the plain Mask R-CNN.
 
-Tokens travel next to the images: the training/inference loop calls
-``set_text_tokens`` before each forward, with token boxes normalised to the
-original image (0..1). Proposals are normalised by the resized image sizes
-that torchvision's transform records, so no coordinate bookkeeping through the
-resize is needed.
+The loop calls ``set_text_tokens`` before each forward. Token boxes are
+normalised to the original image (0..1) and proposals by the resized image
+sizes torchvision records, so both share one coordinate frame.
 """
+
 import torch
 from torch import nn
 
@@ -58,18 +56,28 @@ def roi_text_features(proposals, image_shapes, tokens, sim_slice, min_inside=Non
         if min_inside is None:
             cx = (token_boxes[:, 0] + token_boxes[:, 2]) / 2
             cy = (token_boxes[:, 1] + token_boxes[:, 3]) / 2
-            inside = ((cx[None] >= norm[:, 0:1]) & (cx[None] <= norm[:, 2:3])
-                      & (cy[None] >= norm[:, 1:2]) & (cy[None] <= norm[:, 3:4]))
+            inside = (
+                (cx[None] >= norm[:, 0:1])
+                & (cx[None] <= norm[:, 2:3])
+                & (cy[None] >= norm[:, 1:2])
+                & (cy[None] <= norm[:, 3:4])
+            )
         else:
             tb = token_boxes.to(norm.dtype)
-            ix = (torch.minimum(norm[:, None, 2], tb[None, :, 2]) - torch.maximum(norm[:, None, 0], tb[None, :, 0])).clamp(min=0)
-            iy = (torch.minimum(norm[:, None, 3], tb[None, :, 3]) - torch.maximum(norm[:, None, 1], tb[None, :, 1])).clamp(min=0)
+            ix = (
+                torch.minimum(norm[:, None, 2], tb[None, :, 2])
+                - torch.maximum(norm[:, None, 0], tb[None, :, 0])
+            ).clamp(min=0)
+            iy = (
+                torch.minimum(norm[:, None, 3], tb[None, :, 3])
+                - torch.maximum(norm[:, None, 1], tb[None, :, 1])
+            ).clamp(min=0)
             area = ((tb[:, 2] - tb[:, 0]) * (tb[:, 3] - tb[:, 1])).clamp(min=1e-12)
             inside = (ix * iy) / area[None] >= float(min_inside)
         weights = inside.to(feats.dtype) * conf[None].to(feats.dtype)
         total = weights.sum(1, keepdim=True)
         mean = (weights @ feats) / total.clamp(min=1e-6)
-        sims = feats[:, sim_slice[0]:sim_slice[1]]
+        sims = feats[:, sim_slice[0] : sim_slice[1]]
         masked = sims[None].expand(n_rois, -1, -1).masked_fill(~inside[:, :, None], float("-inf"))
         has = inside.any(1)
         max_sim = torch.where(has[:, None], masked.max(1).values, torch.zeros_like(masked[:, 0]))
@@ -79,8 +87,17 @@ def roi_text_features(proposals, image_shapes, tokens, sim_slice, min_inside=Non
 
 
 class TextAwarePredictor(nn.Module):
-    def __init__(self, base, context, text_dim, sim_slice, hidden=256, token_dropout=0.15, image_dropout=0.15,
-                 min_inside=None):
+    def __init__(
+        self,
+        base,
+        context,
+        text_dim,
+        sim_slice,
+        hidden=256,
+        token_dropout=0.15,
+        image_dropout=0.15,
+        min_inside=None,
+    ):
         super().__init__()
         self.cls_score = base.cls_score
         self.bbox_pred = base.bbox_pred
@@ -88,8 +105,9 @@ class TextAwarePredictor(nn.Module):
         self.sim_slice = (int(sim_slice[0]), int(sim_slice[1]))
         representation = base.cls_score.in_features
         in_dim = int(text_dim) + (self.sim_slice[1] - self.sim_slice[0]) + 2
-        self.text_mlp = nn.Sequential(nn.Linear(in_dim, hidden), nn.ReLU(inplace=True),
-                                      nn.Linear(hidden, representation))
+        self.text_mlp = nn.Sequential(
+            nn.Linear(in_dim, hidden), nn.ReLU(inplace=True), nn.Linear(hidden, representation)
+        )
         nn.init.zeros_(self.text_mlp[2].weight)
         nn.init.zeros_(self.text_mlp[2].bias)
         self.token_dropout = float(token_dropout)
@@ -114,8 +132,9 @@ class TextAwarePredictor(nn.Module):
     def forward(self, x):
         if x.dim() == 4:
             x = torch.flatten(x, start_dim=1)
-        text = roi_text_features(self.context.proposals, self.context.image_shapes, self._tokens(),
-                                 self.sim_slice, self.min_inside)
+        text = roi_text_features(
+            self.context.proposals, self.context.image_shapes, self._tokens(), self.sim_slice, self.min_inside
+        )
         if text.shape[0] != x.shape[0]:
             raise RuntimeError(f"RoI count mismatch: {text.shape[0]} text rows vs {x.shape[0]} features")
         scores = self.cls_score(x + self.text_mlp(text.to(x.dtype)))
@@ -128,9 +147,15 @@ def attach_text_head(model, text_head_cfg):
     heads = model.roi_heads
     heads.box_roi_pool = ProposalRecorder(heads.box_roi_pool, context)
     heads.box_predictor = TextAwarePredictor(
-        heads.box_predictor, context, text_head_cfg["text_dim"], text_head_cfg["sim_slice"],
-        text_head_cfg.get("hidden", 256), text_head_cfg.get("token_dropout", 0.15),
-        text_head_cfg.get("image_dropout", 0.15), text_head_cfg.get("min_inside"))
+        heads.box_predictor,
+        context,
+        text_head_cfg["text_dim"],
+        text_head_cfg["sim_slice"],
+        text_head_cfg.get("hidden", 256),
+        text_head_cfg.get("token_dropout", 0.15),
+        text_head_cfg.get("image_dropout", 0.15),
+        text_head_cfg.get("min_inside"),
+    )
     model.text_context = context
     return model
 
@@ -145,12 +170,16 @@ def set_text_tokens(model, targets, device):
     for target in targets:
         if "_ocr_boxes" not in target:
             raise KeyError("Text-aware model requires datasets built with an OCR provider")
-        tokens.append((target["_ocr_boxes"].to(device), target["_ocr_feats"].to(device),
-                       target["_ocr_conf"].to(device)))
+        tokens.append(
+            (target["_ocr_boxes"].to(device), target["_ocr_feats"].to(device), target["_ocr_conf"].to(device))
+        )
     model.text_context.tokens = tokens
 
 
 def text_parameters(model):
     """Names and parameters of the text branch (for a separate optimizer)."""
-    return [(name, param) for name, param in model.named_parameters()
-            if ".text_mlp." in name and param.requires_grad]
+    return [
+        (name, param)
+        for name, param in model.named_parameters()
+        if ".text_mlp." in name and param.requires_grad
+    ]

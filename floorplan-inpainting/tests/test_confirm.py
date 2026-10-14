@@ -1,4 +1,5 @@
 """Tests for the confirmatory study code (sampler, subset AP, statistics, seam)."""
+
 from pathlib import Path
 
 import numpy as np
@@ -16,13 +17,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def make_records(n_real=35, variants=None):
-    records = [{"image_id": 100 + i, "source_image_id": 100 + i, "synthetic": False,
-                "sample_kind": "full_plan", "occurrences": []} for i in range(n_real)]
+    records = [
+        {
+            "image_id": 100 + i,
+            "source_image_id": 100 + i,
+            "synthetic": False,
+            "sample_kind": "full_plan",
+            "occurrences": [],
+        }
+        for i in range(n_real)
+    ]
     next_id = 9_000_000
     for source, count in (variants or {}).items():
         for _ in range(count):
-            records.append({"image_id": next_id, "source_image_id": 100 + source, "synthetic": True,
-                            "sample_kind": "full_plan", "occurrences": []})
+            records.append(
+                {
+                    "image_id": next_id,
+                    "source_image_id": 100 + source,
+                    "synthetic": True,
+                    "sample_kind": "full_plan",
+                    "occurrences": [],
+                }
+            )
             next_id += 1
     return records
 
@@ -30,8 +46,11 @@ def make_records(n_real=35, variants=None):
 @pytest.mark.parametrize("seed", [43, 1001 + 7, 2026 + 25])
 def test_paired_variant_without_variants_reproduces_e0_order(seed):
     records = make_records()
-    expected = list(RandomSampler(range(35), replacement=False, num_samples=35,
-                                  generator=torch.Generator().manual_seed(seed)))
+    expected = list(
+        RandomSampler(
+            range(35), replacement=False, num_samples=35, generator=torch.Generator().manual_seed(seed)
+        )
+    )
     assert paired_variant_indices(records, seed, 35, 0.5) == expected
 
 
@@ -57,8 +76,9 @@ def test_paired_variant_keeps_plan_order_and_swaps_only_own_variants():
 
 def test_paired_variant_swap_rate_is_close_to_p():
     records = make_records(variants={i: 1 for i in range(35)})
-    swapped = [sum(records[i]["synthetic"] for i in paired_variant_indices(records, s, 35, 0.5))
-               for s in range(200)]
+    swapped = [
+        sum(records[i]["synthetic"] for i in paired_variant_indices(records, s, 35, 0.5)) for s in range(200)
+    ]
     assert abs(np.mean(swapped) / 35 - 0.5) < 0.03
 
 
@@ -84,6 +104,7 @@ def test_confirm_configs_pass_whitelist_and_dispatch_sampler():
 
 def _toy_coco(rng, n_images=12, categories=(1, 2)):
     from pycocotools.coco import COCO
+
     images, annotations, results, ann_id = [], [], [], 1
     for image_id in range(1, n_images + 1):
         images.append({"id": image_id, "width": 200, "height": 200, "file_name": f"{image_id}.png"})
@@ -91,19 +112,42 @@ def _toy_coco(rng, n_images=12, categories=(1, 2)):
             x, y = rng.uniform(0, 150, 2)
             w, h = rng.uniform(10, 50, 2)
             cat = int(rng.choice(categories))
-            annotations.append({"id": ann_id, "image_id": image_id, "category_id": cat, "bbox": [x, y, w, h],
-                                "area": w * h, "iscrowd": 0})
+            annotations.append(
+                {
+                    "id": ann_id,
+                    "image_id": image_id,
+                    "category_id": cat,
+                    "bbox": [x, y, w, h],
+                    "area": w * h,
+                    "iscrowd": 0,
+                }
+            )
             ann_id += 1
             if rng.random() < 0.8:
                 jitter = rng.normal(0, 6, 4)
-                results.append({"image_id": image_id, "category_id": cat, "score": float(rng.random()),
-                                "bbox": [x + jitter[0], y + jitter[1], max(1, w + jitter[2]), max(1, h + jitter[3])]})
+                results.append(
+                    {
+                        "image_id": image_id,
+                        "category_id": cat,
+                        "score": float(rng.random()),
+                        "bbox": [x + jitter[0], y + jitter[1], max(1, w + jitter[2]), max(1, h + jitter[3])],
+                    }
+                )
         for _ in range(int(rng.integers(0, 3))):
-            results.append({"image_id": image_id, "category_id": int(rng.choice(categories)),
-                            "score": float(rng.random()), "bbox": list(rng.uniform(0, 150, 2)) + [20.0, 20.0]})
+            results.append(
+                {
+                    "image_id": image_id,
+                    "category_id": int(rng.choice(categories)),
+                    "score": float(rng.random()),
+                    "bbox": list(rng.uniform(0, 150, 2)) + [20.0, 20.0],
+                }
+            )
     coco = COCO()
-    coco.dataset = {"images": images, "annotations": annotations,
-                    "categories": [{"id": c, "name": str(c)} for c in categories]}
+    coco.dataset = {
+        "images": images,
+        "annotations": annotations,
+        "categories": [{"id": c, "name": str(c)} for c in categories],
+    }
     coco.createIndex()
     return coco, results
 
@@ -112,8 +156,11 @@ def _toy_coco(rng, n_images=12, categories=(1, 2)):
 def test_subset_ap_replicates_cocoeval(categories):
     import contextlib
     import io
+
     from pycocotools.cocoeval import COCOeval
+
     from src.evaluation.subset_ap import PerImageEval
+
     rng = np.random.default_rng(len(categories))
     coco, results = _toy_coco(rng, categories=categories)
     ids = sorted(coco.getImgIds())
@@ -123,7 +170,9 @@ def test_subset_ap_replicates_cocoeval(categories):
     reference = COCOeval(coco, coco.loadRes(results), "bbox")
     reference.params.imgIds = subset
     with contextlib.redirect_stdout(io.StringIO()):
-        reference.evaluate(); reference.accumulate(); reference.summarize()
+        reference.evaluate()
+        reference.accumulate()
+        reference.summarize()
     mine = per_image.ap(subset)
     assert abs(mine["AP"] - reference.stats[0]) < 1e-9
     assert abs(mine["AP50"] - reference.stats[1]) < 1e-9
@@ -144,7 +193,8 @@ def test_statistics_against_t_tables():
 
 def test_seam_is_fixed_in_model_space():
     from src.augmentation.strategy_c import seam_width_in_original_pixels
-    small = CropTransform.from_bbox([100, 100, 50, 50], 2000, 2000, 1.0, 512)   # side 150 -> scale 3.41
+
+    small = CropTransform.from_bbox([100, 100, 50, 50], 2000, 2000, 1.0, 512)  # side 150 -> scale 3.41
     large = CropTransform.from_bbox([100, 100, 300, 300], 2000, 2000, 1.0, 512)  # side 700 -> scale 0.73
     integration = {"seam_width_pixels": 6, "seam_model_pixels": 24}
     assert seam_width_in_original_pixels(integration, small) == 8
@@ -154,6 +204,7 @@ def test_seam_is_fixed_in_model_space():
 
 def test_donor_stroke_mask_is_excluded_from_generation():
     from src.augmentation.strategy_c import _inpaint_mask, donor_stroke_mask
+
     image = np.full((60, 60, 3), 255, np.uint8)
     image[28:32, 10:50] = 0  # a "label" stroke crossing the seam band
     paste = np.zeros((60, 60), bool)

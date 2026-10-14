@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Unattended Phase 2: generate A/B, derive crops, validate, and report. No training."""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -25,4 +26,8 @@ if __name__ == "__main__":
                 break
             if attempt == retries:
                 raise SystemExit(result.returncode)
-            print(f"Retrying transient failures in {script} ({attempt + 1}/{retries}); completed samples are reused", flush=True)
+            print(
+                f"Retrying transient failures in {script} ({attempt + 1}/{retries}); "
+                "completed samples are reused",
+                flush=True,
+            )

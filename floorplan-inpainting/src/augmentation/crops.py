@@ -63,26 +63,24 @@ class CropTransform:
         return asdict(self)
 
     def forward_image(self, image_rgb):
-        crop = image_rgb[self.y0:self.y1, self.x0:self.x1]
+        crop = image_rgb[self.y0 : self.y1, self.x0 : self.x1]
         padded = np.full((self.padded_side, self.padded_side, 3), 255, dtype=np.uint8)
         height, width = crop.shape[:2]
         padded[
-            self.pad_top:self.pad_top + height,
-            self.pad_left:self.pad_left + width,
+            self.pad_top : self.pad_top + height,
+            self.pad_left : self.pad_left + width,
         ] = crop
         return np.asarray(
-            Image.fromarray(padded).resize(
-                (self.output_size, self.output_size), Image.Resampling.BICUBIC
-            )
+            Image.fromarray(padded).resize((self.output_size, self.output_size), Image.Resampling.BICUBIC)
         )
 
     def forward_mask(self, mask):
-        crop = mask[self.y0:self.y1, self.x0:self.x1].astype(np.uint8) * 255
+        crop = mask[self.y0 : self.y1, self.x0 : self.x1].astype(np.uint8) * 255
         padded = np.zeros((self.padded_side, self.padded_side), dtype=np.uint8)
         height, width = crop.shape
         padded[
-            self.pad_top:self.pad_top + height,
-            self.pad_left:self.pad_left + width,
+            self.pad_top : self.pad_top + height,
+            self.pad_left : self.pad_left + width,
         ] = crop
         resized = Image.fromarray(padded).resize(
             (self.output_size, self.output_size), Image.Resampling.NEAREST
@@ -97,8 +95,8 @@ class CropTransform:
         )
         width, height = self.crop_size
         return square[
-            self.pad_top:self.pad_top + height,
-            self.pad_left:self.pad_left + width,
+            self.pad_top : self.pad_top + height,
+            self.pad_left : self.pad_left + width,
         ]
 
 
@@ -110,7 +108,7 @@ def composite_masked(original_rgb, generated_crop_rgb, safe_mask, transform):
     if generated_crop_rgb.shape[:2] != (crop_height, crop_width):
         raise ValueError("Generated crop dimensions do not match crop transform")
     output = original_rgb.copy()
-    local_mask = safe_mask[transform.y0:transform.y1, transform.x0:transform.x1]
-    output_crop = output[transform.y0:transform.y1, transform.x0:transform.x1]
+    local_mask = safe_mask[transform.y0 : transform.y1, transform.x0 : transform.x1]
+    output_crop = output[transform.y0 : transform.y1, transform.x0 : transform.x1]
     output_crop[local_mask] = generated_crop_rgb[local_mask]
     return output

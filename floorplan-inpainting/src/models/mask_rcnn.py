@@ -13,5 +13,6 @@ def build_mask_rcnn(num_classes=20, min_size=1024, max_size=1600, pretrained=Tru
     model.roi_heads.mask_predictor = MaskRCNNPredictor(mask_features, 256, num_classes)
     if text_head:
         from .text_head import attach_text_head
+
         attach_text_head(model, text_head)
     return model

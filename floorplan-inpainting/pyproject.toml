@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["B905"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts put the project root on sys.path before importing src.
+"scripts/*" = ["E402"]
+# Long lines here are generated report sentences.
+"scripts/{analyze_confirm_mc,analyze_followup,analyze_ocr_study,make_confirm_report}.py" = ["E402", "E501"]

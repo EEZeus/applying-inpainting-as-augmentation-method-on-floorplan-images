@@ -10,13 +10,14 @@ Arms:
   real_plus_synth head trained on real + synthetic rare (cats 11-16) crops
 
 Evaluations:
-  A) GT-region top-1 classification on the real test crops  (isolates the
+  A) GT-region top-1 classification on the real test crops (isolates the
      classification bottleneck; no detector error)
   B) two-stage mask AP: label the class-agnostic SAM3 test proposals with the
      head, then COCOeval(segm) vs the multiclass test GT
 
 Writes outputs/final/dino/summary.{json,csv} and report.md. CPU only.
 """
+
 import argparse
 import csv
 import io
@@ -30,7 +31,7 @@ import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-CATS = list(range(1, 20))               # room category ids
+CATS = list(range(1, 20))  # room category ids
 RARE = [11, 12, 13, 14, 15, 16]
 HEAD = list(range(1, 11))
 LOWSUP = [17, 18]
@@ -91,7 +92,7 @@ def linear_predict(net, feat):
 
 
 def knn_predict(train_feat, train_labels, feat, k=5):
-    sim = feat @ train_feat.T                       # cosine, features are L2-normed
+    sim = feat @ train_feat.T  # cosine, features are L2-normed
     order = np.argsort(-sim, axis=1)[:, :k]
     preds, conf = [], []
     for r, idxs in enumerate(order):
@@ -109,12 +110,13 @@ def recall_report(y_true, y_pred):
     per = {}
     for c in CATS:
         m = y_true == c
-        per[c] = {"support": int(m.sum()),
-                  "recall": float((y_pred[m] == c).mean()) if m.any() else None}
+        per[c] = {"support": int(m.sum()), "recall": float((y_pred[m] == c).mean()) if m.any() else None}
     out["per_class"] = per
+
     def macro(ids):
         v = [per[c]["recall"] for c in ids if per[c]["recall"] is not None]
         return statistics.fmean(v) if v else None
+
     out["head_macro_recall"] = macro(HEAD)
     out["rare_macro_recall"] = macro(RARE)
     out["lowsup_macro_recall"] = macro(LOWSUP)
@@ -124,17 +126,25 @@ def recall_report(y_true, y_pred):
 def two_stage_ap(pred_cats, pred_conf, dets, prop_scores, gt_path):
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
+
     results = []
     for cat, conf, det, s in zip(pred_cats, pred_conf, dets, prop_scores):
-        results.append({"image_id": int(det["image_id"]), "category_id": int(cat),
-                        "segmentation": det["segmentation"],
-                        "score": float(s) * float(conf)})
+        results.append(
+            {
+                "image_id": int(det["image_id"]),
+                "category_id": int(cat),
+                "segmentation": det["segmentation"],
+                "score": float(s) * float(conf),
+            }
+        )
     buf = io.StringIO()
     with redirect_stdout(buf):
         gt = COCO(str(gt_path))
         dt = gt.loadRes(results)
         ev = COCOeval(gt, dt, "segm")
-        ev.evaluate(); ev.accumulate(); ev.summarize()
+        ev.evaluate()
+        ev.accumulate()
+        ev.summarize()
         overall = {"AP": float(ev.stats[0]), "AP50": float(ev.stats[1]), "AP75": float(ev.stats[2])}
         gt_cats = set(int(c) for c in gt.getCatIds())
         per_cat = {}
@@ -143,13 +153,21 @@ def two_stage_ap(pred_cats, pred_conf, dets, prop_scores, gt_path):
                 continue
             e = COCOeval(gt, dt, "segm")
             e.params.catIds = [c]
-            e.evaluate(); e.accumulate(); e.summarize()
+            e.evaluate()
+            e.accumulate()
+            e.summarize()
             per_cat[c] = float(e.stats[0])
+
     def macro(ids):
         v = [per_cat[c] for c in ids if c in per_cat and per_cat[c] >= 0]
         return statistics.fmean(v) if v else None
-    return {"overall": overall, "per_class_AP": per_cat,
-            "head_macro_AP": macro(HEAD), "rare_macro_AP": macro(RARE)}
+
+    return {
+        "overall": overall,
+        "per_class_AP": per_cat,
+        "head_macro_AP": macro(HEAD),
+        "rare_macro_AP": macro(RARE),
+    }
 
 
 def main():
@@ -177,20 +195,24 @@ def main():
 
     arms = {
         "real": (Xtr, gt_tr["labels"]),
-        "real_plus_synth": (np.concatenate([Xtr, Xsy]),
-                            np.concatenate([gt_tr["labels"], synth["labels"]])),
+        "real_plus_synth": (np.concatenate([Xtr, Xsy]), np.concatenate([gt_tr["labels"], synth["labels"]])),
     }
 
-    report = {"knn_k": args.knn_k, "n_train_real": int(len(Xtr)),
-              "n_synth_rare": int(len(Xsy)), "n_test_gt": int(len(Xte)),
-              "n_test_proposals": int(len(Xpr)), "arms": {}}
+    report = {
+        "knn_k": args.knn_k,
+        "n_train_real": int(len(Xtr)),
+        "n_synth_rare": int(len(Xsy)),
+        "n_test_gt": int(len(Xte)),
+        "n_test_proposals": int(len(Xpr)),
+        "arms": {},
+    }
     rows = []
     for arm, (Xa, ya) in arms.items():
         net = train_linear(Xa, ya)
         lin_va = recall_report(gt_va["labels"], linear_predict(net, Xva)[0])
         knn_va = recall_report(gt_va["labels"], knn_predict(Xa, ya, Xva, args.knn_k)[0])
 
-        lin_te_pred, lin_te_conf = linear_predict(net, Xte)
+        lin_te_pred, _ = linear_predict(net, Xte)
         knn_te_pred, _ = knn_predict(Xa, ya, Xte, args.knn_k)
         lin_te = recall_report(gt_te["labels"], lin_te_pred)
         knn_te = recall_report(gt_te["labels"], knn_te_pred)
@@ -206,30 +228,51 @@ def main():
             "two_stage_detection_AP": {"linear": lin_ap, "knn": knn_ap},
         }
         for head, te, apr in (("linear", lin_te, lin_ap), ("knn", knn_te, knn_ap)):
-            rows.append({"arm": arm, "head": head,
-                         "test_top1_acc": round(te["top1_acc"], 4),
-                         "head_macro_recall": round(te["head_macro_recall"], 4) if te["head_macro_recall"] is not None else None,
-                         "rare_macro_recall": round(te["rare_macro_recall"], 4) if te["rare_macro_recall"] is not None else None,
-                         "twostage_mask_AP": round(apr["overall"]["AP"], 4),
-                         "twostage_rare_macro_AP": round(apr["rare_macro_AP"], 4) if apr["rare_macro_AP"] is not None else None})
+            rows.append(
+                {
+                    "arm": arm,
+                    "head": head,
+                    "test_top1_acc": round(te["top1_acc"], 4),
+                    "head_macro_recall": round(te["head_macro_recall"], 4)
+                    if te["head_macro_recall"] is not None
+                    else None,
+                    "rare_macro_recall": round(te["rare_macro_recall"], 4)
+                    if te["rare_macro_recall"] is not None
+                    else None,
+                    "twostage_mask_AP": round(apr["overall"]["AP"], 4),
+                    "twostage_rare_macro_AP": round(apr["rare_macro_AP"], 4)
+                    if apr["rare_macro_AP"] is not None
+                    else None,
+                }
+            )
 
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     with (out_dir / "summary.csv").open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]))
-        w.writeheader(); w.writerows(rows)
+        w.writeheader()
+        w.writerows(rows)
 
-    lines = ["# DINOv2 two-stage room typing", "",
-             f"- real train crops: {report['n_train_real']}  |  synthetic rare crops: {report['n_synth_rare']}",
-             f"- test GT crops: {report['n_test_gt']}  |  test agnostic proposals: {report['n_test_proposals']}",
-             "", "| arm | head | test top-1 | head recall | rare recall | two-stage mask AP | two-stage rare AP |",
-             "|---|---|---|---|---|---|---|"]
+    lines = [
+        "# DINOv2 two-stage room typing",
+        "",
+        f"- real train crops: {report['n_train_real']}  |  synthetic rare crops: {report['n_synth_rare']}",
+        f"- test GT crops: {report['n_test_gt']}  |  test agnostic proposals: {report['n_test_proposals']}",
+        "",
+        "| arm | head | test top-1 | head recall | rare recall | two-stage mask AP | two-stage rare AP |",
+        "|---|---|---|---|---|---|---|",
+    ]
     for r in rows:
-        lines.append("| {arm} | {head} | {test_top1_acc} | {head_macro_recall} | {rare_macro_recall} | "
-                     "{twostage_mask_AP} | {twostage_rare_macro_AP} |".format(**r))
-    lines += ["", "Reference (fine-tuned multiclass, same test split): "
-              "SAM3 0.115 mask AP; best Mask R-CNN ~0.10; Mask R-CNN e0 0.081."]
+        lines.append(
+            "| {arm} | {head} | {test_top1_acc} | {head_macro_recall} | {rare_macro_recall} | "
+            "{twostage_mask_AP} | {twostage_rare_macro_AP} |".format(**r)
+        )
+    lines += [
+        "",
+        "Reference (fine-tuned multiclass, same test split): "
+        "SAM3 0.115 mask AP; best Mask R-CNN ~0.10; Mask R-CNN e0 0.081.",
+    ]
     (out_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 

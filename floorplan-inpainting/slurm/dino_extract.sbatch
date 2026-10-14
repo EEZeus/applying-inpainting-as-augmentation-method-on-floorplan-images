@@ -1,6 +1,5 @@
 #!/bin/bash
-# Experiment 3, stage 1: extract frozen DINOv2 features for all crop sets.
-# Frozen dinov2-base at 224 px, batch 16 -> < 3 GB GPU; any GPU is fine.
+# DINOv2 stage 1: extract frozen dinov2-base features for all crop sets.
 #SBATCH --job-name=fp-dino-extract
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4

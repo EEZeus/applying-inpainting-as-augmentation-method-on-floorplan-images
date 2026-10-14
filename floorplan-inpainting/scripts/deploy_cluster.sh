@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
-# Update the ONE cluster checkout in place to match local HEAD.
-#
-# The cluster has a normal git checkout of this repo at $CLUSTER_TOPLEVEL
-# (branch main; floorplan-inpainting/{data,models,outputs} are real gitignored
-# dirs). This ships local commits there as a git bundle (no GitHub credentials
-# needed) and fast-forwards. No per-commit release directory, no symlink setup.
-#
-#   commit locally  ->  scripts/deploy_cluster.sh  ->  ssh <host> 'cd <dir> && sbatch ...'
-#
-# Fast-forward only: it refuses if the cluster branch has commits not in local
-# HEAD (resolve by hand in that case). It never touches data/models/outputs.
+# Fast-forward the cluster checkout to local main via a git bundle (no GitHub credentials needed).
+# Refuses if the cluster branch has diverged; data/, models/ and outputs/ are not touched.
 set -euo pipefail
 
 CLUSTER_HOST=${CLUSTER_HOST:-login1.pegasus.kl.dfki.de}

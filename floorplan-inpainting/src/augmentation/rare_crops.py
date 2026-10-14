@@ -1,6 +1,6 @@
 """Contextual training crops with geometric clipping of every intersecting room."""
+
 import copy
-import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -23,7 +23,11 @@ def clip_annotation(annotation, transform):
     scale = transform.output_size / transform.padded_side
     clipped = affinity.translate(clipped, transform.pad_left - transform.x0, transform.pad_top - transform.y0)
     clipped = affinity.scale(clipped, xfact=scale, yfact=scale, origin=(0, 0))
-    polygons = [clipped] if clipped.geom_type == "Polygon" else [p for p in clipped.geoms if p.geom_type == "Polygon"]
+    polygons = (
+        [clipped]
+        if clipped.geom_type == "Polygon"
+        else [p for p in clipped.geoms if p.geom_type == "Polygon"]
+    )
     if not polygons:
         return None
     if any(p.interiors for p in polygons):
@@ -38,16 +42,25 @@ def clip_annotation(annotation, transform):
     return result
 
 
-def build_rare_crops(coco, image_dir, output_dir, train_ids, rare_ids, config,
-                     filename="instances_train_aug_a_crops.json"):
+def build_rare_crops(
+    coco, image_dir, output_dir, train_ids, rare_ids, config, filename="instances_train_aug_a_crops.json"
+):
     output_dir = Path(output_dir)
     (output_dir / "images").mkdir(parents=True, exist_ok=True)
     by_image = defaultdict(list)
     for ann in coco["annotations"]:
         by_image[ann["image_id"]].append(ann)
-    context = max(float(config.get("context_fraction", 1.)), float(config.get("min_context_fraction", .75)))
-    output = {"categories": copy.deepcopy(coco["categories"]), "images": [], "annotations": [],
-              "info": {"description": "Rare-centered training crops; mix with full plans, not an independent geometry dataset"}}
+    context = max(float(config.get("context_fraction", 1.0)), float(config.get("min_context_fraction", 0.75)))
+    output = {
+        "categories": copy.deepcopy(coco["categories"]),
+        "images": [],
+        "annotations": [],
+        "info": {
+            "description": (
+                "Rare-centered training crops; mix with full plans, not an independent geometry dataset"
+            )
+        },
+    }
     next_ann = 2_000_000_000
     for info in sorted(coco["images"], key=lambda im: im["id"]):
         source_id = info.get("source_image_id", info["id"])
@@ -56,10 +69,14 @@ def build_rare_crops(coco, image_dir, output_dir, train_ids, rare_ids, config,
         anns = by_image[info["id"]]
         targets = [a for a in anns if a["category_id"] in rare_ids]
         if info.get("synthetic"):
-            # A single crop per generated target, avoiding extra duplicate contexts.
+            # One crop per generated target, to avoid duplicate contexts.
             source_target = info["target_annotation_id"]
-            source_annotations = sorted([a for a in coco["annotations"] if a["image_id"] == source_id], key=lambda a: a["id"])
-            original_ordinal = next((i for i, a in enumerate(source_annotations) if a["id"] == source_target), None)
+            source_annotations = sorted(
+                [a for a in coco["annotations"] if a["image_id"] == source_id], key=lambda a: a["id"]
+            )
+            original_ordinal = next(
+                (i for i, a in enumerate(source_annotations) if a["id"] == source_target), None
+            )
             if original_ordinal is None:
                 raise ValueError("Synthetic crop target cannot be traced to original annotation")
             targets = [sorted(anns, key=lambda a: a["id"])[original_ordinal]]
@@ -68,16 +85,26 @@ def build_rare_crops(coco, image_dir, output_dir, train_ids, rare_ids, config,
         with Image.open(Path(image_dir) / info["file_name"]) as handle:
             image = np.asarray(handle.convert("RGB"))
         for target in sorted(targets, key=lambda a: a["id"]):
-            transform = CropTransform.from_bbox(target["bbox"], info["width"], info["height"],
-                                                context, config.get("output_size", 512))
+            transform = CropTransform.from_bbox(
+                target["bbox"], info["width"], info["height"], context, config.get("output_size", 512)
+            )
             image_id = 2_000_000 + len(output["images"])
             name = f"images/crop_im{info['id']}_ann{target['id']}.png"
             _save_png_atomic(output_dir / name, transform.forward_image(image))
-            output["images"].append({"id": image_id, "file_name": name,
-                "width": transform.output_size, "height": transform.output_size,
-                "source_image_id": source_id, "parent_image_id": info["id"],
-                "target_annotation_id": target["id"], "synthetic": info.get("synthetic", False),
-                "strategy": info.get("strategy", "real"), "crop_transform": transform.to_dict()})
+            output["images"].append(
+                {
+                    "id": image_id,
+                    "file_name": name,
+                    "width": transform.output_size,
+                    "height": transform.output_size,
+                    "source_image_id": source_id,
+                    "parent_image_id": info["id"],
+                    "target_annotation_id": target["id"],
+                    "synthetic": info.get("synthetic", False),
+                    "strategy": info.get("strategy", "real"),
+                    "crop_transform": transform.to_dict(),
+                }
+            )
             target_retained = False
             for annotation in sorted(anns, key=lambda a: a["id"]):
                 clipped = clip_annotation(annotation, transform)

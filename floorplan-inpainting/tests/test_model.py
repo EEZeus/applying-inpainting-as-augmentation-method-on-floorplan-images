@@ -1,6 +1,9 @@
 import pytest
-torch = pytest.importorskip("torch")
+
+pytest.importorskip("torch")
 pytest.importorskip("torchvision")
+import torch
+
 from src.models.mask_rcnn import build_mask_rcnn
 
 
@@ -10,4 +13,3 @@ def test_mask_rcnn_forward_pass():
     with torch.inference_mode():
         output = model([torch.rand(3, 96, 128)])[0]
     assert {"boxes", "labels", "scores", "masks"}.issubset(output)
-

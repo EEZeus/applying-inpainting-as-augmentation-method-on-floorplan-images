@@ -33,4 +33,3 @@ def validate_groups(image_ids):
     extra = sorted(mapping.keys() - image_ids)
     if missing or extra:
         raise ValueError(f"Project map mismatch: missing={missing}, extra={extra}")
-

@@ -1,11 +1,12 @@
 """COCO AP on arbitrary image multisets from one COCOeval.evaluate() pass.
 
-``COCOeval.evaluate()`` matches detections to ground truth per (image, category).
-AP over any subset or bootstrap resample of images (duplicates allowed) only
-needs a re-accumulation of those per-image records. ``ap_on_images`` replicates
-``COCOeval.accumulate()`` + the AP@[.50:.95] / AP50 summary for area 'all' and
-maxDets=100 exactly; ``check_against_cocoeval`` verifies that on the full set.
+``COCOeval.evaluate()`` matches detections per (image, category), so AP over any
+subset or bootstrap resample of images (duplicates allowed) only needs those
+per-image records re-accumulated. ``PerImageEval`` replicates ``accumulate()`` and
+the AP / AP50 summary for area 'all', maxDets=100; ``check_against_cocoeval``
+verifies this on the full set.
 """
+
 import contextlib
 import gzip
 import io
@@ -57,10 +58,10 @@ class PerImageEval:
             entries = [e for e in entries if e is not None]
             if not entries:
                 continue
-            scores = np.concatenate([e["dtScores"][0:self.max_det] for e in entries])
+            scores = np.concatenate([e["dtScores"][0 : self.max_det] for e in entries])
             order = np.argsort(-scores, kind="mergesort")
-            dtm = np.concatenate([e["dtMatches"][:, 0:self.max_det] for e in entries], axis=1)[:, order]
-            dtig = np.concatenate([e["dtIgnore"][:, 0:self.max_det] for e in entries], axis=1)[:, order]
+            dtm = np.concatenate([e["dtMatches"][:, 0 : self.max_det] for e in entries], axis=1)[:, order]
+            dtig = np.concatenate([e["dtIgnore"][:, 0 : self.max_det] for e in entries], axis=1)[:, order]
             gtig = np.concatenate([e["gtIgnore"] for e in entries])
             npig = np.count_nonzero(gtig == 0)
             if npig == 0:
@@ -87,9 +88,11 @@ class PerImageEval:
         precision = self.precision(image_ids)
         if precision is None:
             return {"AP": 0.0, "AP50": 0.0}
+
         def mean_valid(values):
             values = values[values > -1]
             return float(values.mean()) if values.size else -1.0
+
         return {"AP": mean_valid(precision), "AP50": mean_valid(precision[self.iou50])}
 
     def check_against_cocoeval(self, tolerance=1e-9):

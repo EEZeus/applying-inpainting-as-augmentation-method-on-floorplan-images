@@ -1,9 +1,9 @@
 """Fair-budget training for Phase 3 multiclass and class-agnostic tracks."""
+
 import csv
 import hashlib
 import json
 import time
-from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader
@@ -12,8 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from src.data.coco_dataset import FloorplanCocoDataset, read_split
 from src.data.transforms import DetectionTransform, collate_fn
 from src.evaluation.coco_eval import evaluate_coco_results
-from src.experiments.data import (build_epoch_sampler, build_training_dataset,
-                                  original_train_counts)
+from src.experiments.data import build_epoch_sampler, build_training_dataset, original_train_counts
 from src.models.mask_rcnn import build_mask_rcnn
 from src.ocr.features import provider_from_config
 from src.training.engine import predict_coco, train_one_epoch
@@ -22,8 +21,9 @@ from src.utils.reproducibility import seed_everything
 
 
 def _stable_hash(experiment_cfg, model_cfg, track, seed):
-    payload = json.dumps({"experiment": experiment_cfg, "model": model_cfg,
-                          "track": track, "seed": seed}, sort_keys=True)
+    payload = json.dumps(
+        {"experiment": experiment_cfg, "model": model_cfg, "track": track, "seed": seed}, sort_keys=True
+    )
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
@@ -110,7 +110,8 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     samples_per_epoch = steps_per_epoch * int(model_cfg["batch_size"])
     output_dir = resolve_path(experiment_cfg["output_root"]) / track / experiment_cfg["id"] / f"seed_{seed}"
     checkpoint_dir, log_dir = output_dir / "checkpoints", output_dir / "tensorboard"
-    checkpoint_dir.mkdir(parents=True, exist_ok=True); log_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
     signature = _stable_hash(experiment_cfg, model_cfg, track, seed)
     manifest_path = output_dir / "run_manifest.json"
     if manifest_path.exists():
@@ -120,9 +121,19 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
         if not resume:
             raise FileExistsError(f"Experiment output already exists; pass --resume: {output_dir}")
     else:
-        manifest_path.write_text(json.dumps({"signature": signature, "experiment": experiment_cfg,
-                                             "model": model_cfg, "track": track, "seed": seed}, indent=2),
-                                 encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "signature": signature,
+                    "experiment": experiment_cfg,
+                    "model": model_cfg,
+                    "track": track,
+                    "seed": seed,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
     seed_everything(seed)
     device = torch.device(model_cfg["device"] if torch.cuda.is_available() else "cpu")
@@ -133,32 +144,36 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     train_dataset, records = build_training_dataset(experiment_cfg, model_cfg, class_agnostic, ocr)
     original_counts = original_train_counts()
     rare_cfg = load_yaml(resolve_path("configs/rare_classes.yaml"))
-    rare_ids = {int(cid) for cid, value in rare_cfg["categories"].items()
-                if value["role"] == "primary_rare"}
+    rare_ids = {int(cid) for cid, value in rare_cfg["categories"].items() if value["role"] == "primary_rare"}
 
-    evaluation_dataset_cfg = load_yaml(resolve_path(
-        "configs/dataset_agnostic.yaml" if class_agnostic else "configs/dataset.yaml"))
+    evaluation_dataset_cfg = load_yaml(
+        resolve_path("configs/dataset_agnostic.yaml" if class_agnostic else "configs/dataset.yaml")
+    )
     val_ids = read_split(split_dir(evaluation_dataset_cfg["split_dir"]) / "val.txt")
-    val_dataset = FloorplanCocoDataset(resolve_path(evaluation_dataset_cfg["image_dir"]),
-                                       resolve_path(evaluation_dataset_cfg["annotation_file"]), val_ids,
-                                       DetectionTransform(), ocr=ocr)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False,
-                            num_workers=model_cfg["num_workers"], collate_fn=collate_fn)
+    val_dataset = FloorplanCocoDataset(
+        resolve_path(evaluation_dataset_cfg["image_dir"]),
+        resolve_path(evaluation_dataset_cfg["annotation_file"]),
+        val_ids,
+        DetectionTransform(),
+        ocr=ocr,
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=1, shuffle=False, num_workers=model_cfg["num_workers"], collate_fn=collate_fn
+    )
     num_classes = 2 if class_agnostic else 20
     last_path = checkpoint_dir / "last.pth"
     restoring = resume and last_path.exists()
-    # Always build the pretrained architecture: torchvision freezes the early
-    # backbone layers only when weights are loaded, so pretrained=False would
-    # give a different trainable-parameter set and break optimizer.load_state_dict
-    # on --resume. The pretrained weights are overwritten from the checkpoint
-    # below when restoring, and come from the local TORCH_HOME cache.
-    model = build_mask_rcnn(num_classes, model_cfg["min_size"], model_cfg["max_size"],
-                            pretrained=True, text_head=text_head).to(device)
+    # Always pretrained=True: torchvision freezes early backbone layers only when weights are
+    # loaded, so the trainable-parameter set (and optimizer state on --resume) must match.
+    model = build_mask_rcnn(
+        num_classes, model_cfg["min_size"], model_cfg["max_size"], pretrained=True, text_head=text_head
+    ).to(device)
     text_optimizer = None
     if text_head and text_head.get("optimizer"):
         if text_head["optimizer"] != "adamw":
             raise ValueError("text_head.optimizer must be adamw")
         from src.models.text_head import text_parameters
+
         text_params = text_parameters(model)
         if not text_params:
             raise ValueError("Text-aware model has no text parameters")
@@ -166,25 +181,35 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
         params = [p for p in model.parameters() if p.requires_grad and id(p) not in excluded]
         # The text branch starts at zero; a separate AdamW without step decay lets it
         # learn within the fixed 875-step budget while the detector keeps e0's SGD.
-        text_optimizer = torch.optim.AdamW([param for _, param in text_params], lr=float(text_head["lr"]),
-                                           weight_decay=float(text_head.get("weight_decay", 1e-4)))
+        text_optimizer = torch.optim.AdamW(
+            [param for _, param in text_params],
+            lr=float(text_head["lr"]),
+            weight_decay=float(text_head.get("weight_decay", 1e-4)),
+        )
     else:
         params = [parameter for parameter in model.parameters() if parameter.requires_grad]
     if model_cfg["optimizer"].lower() == "adamw":
-        optimizer = torch.optim.AdamW(params, lr=model_cfg["learning_rate"],
-                                      weight_decay=model_cfg["weight_decay"])
+        optimizer = torch.optim.AdamW(
+            params, lr=model_cfg["learning_rate"], weight_decay=model_cfg["weight_decay"]
+        )
     else:
-        optimizer = torch.optim.SGD(params, lr=model_cfg["learning_rate"],
-                                    momentum=model_cfg["momentum"], weight_decay=model_cfg["weight_decay"])
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, model_cfg["lr_step_size"],
-                                                gamma=model_cfg["lr_gamma"])
+        optimizer = torch.optim.SGD(
+            params,
+            lr=model_cfg["learning_rate"],
+            momentum=model_cfg["momentum"],
+            weight_decay=model_cfg["weight_decay"],
+        )
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, model_cfg["lr_step_size"], gamma=model_cfg["lr_gamma"]
+    )
     scaler = torch.cuda.amp.GradScaler(enabled=model_cfg["amp"] and device.type == "cuda")
     start_epoch, best_ap, total_steps, total_samples, prior_runtime = 1, -1.0, 0, 0, 0.0
     if restoring:
         state = torch.load(last_path, map_location="cpu")
         if state.get("signature") != signature or state.get("num_classes") != num_classes:
             raise ValueError("Checkpoint provenance does not match this run")
-        model.load_state_dict(state["model"]); optimizer.load_state_dict(state["optimizer"])
+        model.load_state_dict(state["model"])
+        optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
         if text_optimizer is not None:
             text_optimizer.load_state_dict(state["text_optimizer"])
@@ -195,9 +220,14 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     category_names = {int(cid): value["name"] for cid, value in rare_cfg["categories"].items()}
     original = json.loads(resolve_path("data/processed/instances_deduplicated.json").read_text())
     category_names.update({c["id"]: c["name"] for c in original["categories"]})
-    exposure_tags = [("A", "synthetic_A"), ("B", "synthetic_B"), ("C", "synthetic_C"),
-                     ("C_MULTI", "synthetic_C_MULTI"), ("LORA", "synthetic_LORA"),
-                     ("LORA_MULTI", "synthetic_LORA_MULTI")]
+    exposure_tags = [
+        ("A", "synthetic_A"),
+        ("B", "synthetic_B"),
+        ("C", "synthetic_C"),
+        ("C_MULTI", "synthetic_C_MULTI"),
+        ("LORA", "synthetic_LORA"),
+        ("LORA_MULTI", "synthetic_LORA_MULTI"),
+    ]
     if "text_relabel" in experiment_cfg["dataset"]["sources"]:
         # Only for the new arms, so older runs keep their CSV header on resume.
         exposure_tags.append(("TEXT", "synthetic_TEXT"))
@@ -205,62 +235,101 @@ def train_experiment(experiment_cfg, track="multiclass", seed=None, epochs=None,
     history_path = output_dir / "training_history.csv"
     started = time.time()
     for epoch in range(start_epoch, epoch_budget + 1):
-        sampler = build_epoch_sampler(records, experiment_cfg, seed + epoch, samples_per_epoch,
-                                      original_counts, rare_ids)
-        loader = DataLoader(train_dataset, batch_size=model_cfg["batch_size"], sampler=sampler,
-                            num_workers=model_cfg["num_workers"], collate_fn=collate_fn,
-                            pin_memory=device.type == "cuda", drop_last=True)
-        report = train_one_epoch(model, loader, [optimizer] + ([text_optimizer] if text_optimizer else []),
-                                 device, scaler, epoch)
+        sampler = build_epoch_sampler(
+            records, experiment_cfg, seed + epoch, samples_per_epoch, original_counts, rare_ids
+        )
+        loader = DataLoader(
+            train_dataset,
+            batch_size=model_cfg["batch_size"],
+            sampler=sampler,
+            num_workers=model_cfg["num_workers"],
+            collate_fn=collate_fn,
+            pin_memory=device.type == "cuda",
+            drop_last=True,
+        )
+        report = train_one_epoch(
+            model, loader, [optimizer] + ([text_optimizer] if text_optimizer else []), device, scaler, epoch
+        )
         if report["optimizer_steps"] != steps_per_epoch:
             raise RuntimeError("Fixed optimizer-step budget was not respected")
         scheduler.step()
         bbox_results, mask_results = predict_coco(model, val_loader, device)
-        metrics, _, _ = evaluate_coco_results(resolve_path(evaluation_dataset_cfg["annotation_file"]),
-                                               bbox_results, mask_results, val_ids)
+        metrics, _, _ = evaluate_coco_results(
+            resolve_path(evaluation_dataset_cfg["annotation_file"]), bbox_results, mask_results, val_ids
+        )
         mask_ap = metrics["mask"]["AP"]
-        total_steps += report["optimizer_steps"]; total_samples += report["samples_seen"]
+        total_steps += report["optimizer_steps"]
+        total_samples += report["samples_seen"]
         writer.add_scalar("train/loss", report["loss"], epoch)
         writer.add_scalar("val/mask_AP", mask_ap, epoch)
         writer.add_scalar("train/learning_rate", optimizer.param_groups[0]["lr"], epoch)
         exposure_rows = []
         for category_id in sorted(category_names):
             real_seen = report["class_exposure"].get((category_id, "real"), 0)
-            row = {"epoch": epoch, "category_id": category_id, "category_name": category_names[category_id],
-                   "real_occurrences_seen": real_seen}
+            row = {
+                "epoch": epoch,
+                "category_id": category_id,
+                "category_name": category_names[category_id],
+                "real_occurrences_seen": real_seen,
+            }
             for name, tag in exposure_tags:
-                row[f"synthetic_{name}_occurrences_seen"] = report["class_exposure"].get((category_id, tag), 0)
+                row[f"synthetic_{name}_occurrences_seen"] = report["class_exposure"].get(
+                    (category_id, tag), 0
+                )
             row["total_occurrences_seen"] = real_seen + sum(
-                row[f"synthetic_{name}_occurrences_seen"] for name, _ in exposure_tags)
+                row[f"synthetic_{name}_occurrences_seen"] for name, _ in exposure_tags
+            )
             exposure_rows.append(row)
         _append_rows(exposure_path, exposure_rows, list(exposure_rows[0]))
-        history = {"epoch": epoch, "training_loss": report["loss"], "validation_mask_AP": mask_ap,
-                   "learning_rate": optimizer.param_groups[0]["lr"],
-                   "optimizer_steps": report["optimizer_steps"], "samples_seen": report["samples_seen"],
-                   "full_plan_samples_seen": report["full_plan_samples_seen"],
-                   "rare_crop_samples_seen": report["rare_crop_samples_seen"],
-                   "epoch_seconds": report["seconds"]}
+        history = {
+            "epoch": epoch,
+            "training_loss": report["loss"],
+            "validation_mask_AP": mask_ap,
+            "learning_rate": optimizer.param_groups[0]["lr"],
+            "optimizer_steps": report["optimizer_steps"],
+            "samples_seen": report["samples_seen"],
+            "full_plan_samples_seen": report["full_plan_samples_seen"],
+            "rare_crop_samples_seen": report["rare_crop_samples_seen"],
+            "epoch_seconds": report["seconds"],
+        }
         _append_rows(history_path, [history], list(history))
         elapsed = prior_runtime + time.time() - started
         if mask_ap > best_ap:
             best_ap = mask_ap
-        state = {"model": model.state_dict(), "optimizer": optimizer.state_dict(),
-                 "scheduler": scheduler.state_dict(), "epoch": epoch, "val_mask_AP": mask_ap,
-                 "best_val_mask_AP": best_ap, "runtime_seconds": elapsed,
-                 "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
-                 "num_classes": num_classes, "class_agnostic": class_agnostic,
-                 "total_optimizer_steps": total_steps, "samples_seen": total_samples,
-                 "signature": signature, "experiment_id": experiment_cfg["id"], "text_head": text_head}
+        state = {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "epoch": epoch,
+            "val_mask_AP": mask_ap,
+            "best_val_mask_AP": best_ap,
+            "runtime_seconds": elapsed,
+            "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+            "num_classes": num_classes,
+            "class_agnostic": class_agnostic,
+            "total_optimizer_steps": total_steps,
+            "samples_seen": total_samples,
+            "signature": signature,
+            "experiment_id": experiment_cfg["id"],
+            "text_head": text_head,
+        }
         if text_optimizer is not None:
             state["text_optimizer"] = text_optimizer.state_dict()
         torch.save(state, last_path)
         if mask_ap >= best_ap:
             torch.save(state, checkpoint_dir / "best.pth")
     writer.close()
-    result = {"experiment_id": experiment_cfg["id"], "track": track, "seed": seed,
-              "best_val_mask_AP": best_ap, "total_optimizer_steps": total_steps,
-              "samples_seen": total_samples, "steps_per_epoch": steps_per_epoch,
-              "epochs": epoch_budget, "runtime_seconds": prior_runtime + time.time() - started,
-              "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"}
+    result = {
+        "experiment_id": experiment_cfg["id"],
+        "track": track,
+        "seed": seed,
+        "best_val_mask_AP": best_ap,
+        "total_optimizer_steps": total_steps,
+        "samples_seen": total_samples,
+        "steps_per_epoch": steps_per_epoch,
+        "epochs": epoch_budget,
+        "runtime_seconds": prior_runtime + time.time() - started,
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+    }
     (output_dir / "training_summary.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result, output_dir, evaluation_dataset_cfg, model_cfg

@@ -41,7 +41,11 @@ def test_class_agnostic_dataset_uses_unchanged_split_ids():
         read_split(ROOT / "data/splits/train.txt"),
     )
     assert len(dataset) == 35
-    assert {annotation["category_id"] for annotations in dataset.annotations.values() for annotation in annotations} == {1}
+    assert {
+        annotation["category_id"]
+        for annotations in dataset.annotations.values()
+        for annotation in annotations
+    } == {1}
     assert sum(map(len, dataset.annotations.values())) == 887
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from .grouping import image_to_project
 
-
 DUPLICATE_GROUPS = ((17, 22), (19, 24), (20, 25, 26))
 
 
@@ -30,13 +29,15 @@ def deduplicate_coco(annotation_file, image_dir, output_file, manifest_file):
         if len(hashes) != 1:
             raise ValueError(f"Expected byte-identical images in group {group}")
         removed.update(duplicates)
-        rows.append({
-            "canonical_image_id": canonical,
-            "duplicate_image_ids": ";".join(map(str, duplicates)),
-            "filename": images[canonical]["file_name"],
-            "project": projects[canonical],
-            "reason": "exact_sha256_duplicate",
-        })
+        rows.append(
+            {
+                "canonical_image_id": canonical,
+                "duplicate_image_ids": ";".join(map(str, duplicates)),
+                "filename": images[canonical]["file_name"],
+                "project": projects[canonical],
+                "reason": "exact_sha256_duplicate",
+            }
+        )
 
     cleaned = dict(coco)
     cleaned["images"] = [im for im in coco["images"] if im["id"] not in removed]
@@ -51,8 +52,9 @@ def deduplicate_coco(annotation_file, image_dir, output_file, manifest_file):
         writer.writeheader()
         writer.writerows(rows)
     return {
-        "images_before": len(coco["images"]), "images_after": len(cleaned["images"]),
+        "images_before": len(coco["images"]),
+        "images_after": len(cleaned["images"]),
         "annotations_before": len(coco["annotations"]),
-        "annotations_after": len(cleaned["annotations"]), "removed_image_ids": sorted(removed),
+        "annotations_after": len(cleaned["annotations"]),
+        "removed_image_ids": sorted(removed),
     }
-

@@ -8,10 +8,8 @@ from pathlib import Path
 
 from hydra import compose, initialize_config_dir
 from omegaconf import open_dict
-
 from sam3.train.train import single_node_runner
 from sam3.train.utils.train_utils import register_omegaconf_resolvers
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,9 +33,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=ROOT / "configs/sam3_floorplan.yaml")
     parser.add_argument("--mode", choices=("train", "test"), required=True)
-    parser.add_argument("--overrides", nargs="*", default=[],
-                        help="Hydra dotlist overrides, e.g. "
-                             "paths.dataset_root=/abs/path paths.experiment_log_dir=/abs/path")
+    parser.add_argument(
+        "--overrides",
+        nargs="*",
+        default=[],
+        help="Hydra dotlist overrides, e.g. paths.dataset_root=/abs/path paths.experiment_log_dir=/abs/path",
+    )
     args = parser.parse_args()
 
     if args.mode == "train":

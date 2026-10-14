@@ -1,5 +1,5 @@
 #!/bin/bash
-# Experiment 3, stage 2: train the linear + kNN heads and evaluate. CPU only.
+# DINOv2 stage 2: train the linear and kNN heads and evaluate. CPU only.
 #SBATCH --job-name=fp-dino-analyze
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=12G

@@ -9,11 +9,10 @@ def _mean_valid(values):
 
 
 def per_class_mask_metrics(coco_gt, mask_evaluator, image_ids):
-    """Extract per-class AP from one accumulated COCO segmentation evaluation.
+    """Per-class mask AP read from one accumulated COCOeval.
 
-    COCOeval precision has dimensions [IoU, recall, category, area, maxDets].
-    Reusing it is both faster and safer than repeatedly calling COCO.loadRes,
-    which mutates result dictionaries in place.
+    Precision has dimensions [IoU, recall, category, area, maxDets]. Reusing it avoids
+    repeated COCO.loadRes calls, which mutate the result dicts in place.
     """
     image_ids = set(image_ids)
     test_counts = Counter(
@@ -23,7 +22,9 @@ def per_class_mask_metrics(coco_gt, mask_evaluator, image_ids):
     precision = None
     iou_thresholds = None
     if mask_evaluator is not None:
-        category_index = {category_id: index for index, category_id in enumerate(mask_evaluator.params.catIds)}
+        category_index = {
+            category_id: index for index, category_id in enumerate(mask_evaluator.params.catIds)
+        }
         precision = mask_evaluator.eval["precision"]
         iou_thresholds = np.asarray(mask_evaluator.params.iouThrs)
     rows = []
@@ -37,10 +38,15 @@ def per_class_mask_metrics(coco_gt, mask_evaluator, image_ids):
             iou50 = np.flatnonzero(np.isclose(iou_thresholds, 0.5))
             if iou50.size:
                 ap50 = _mean_valid(category_precision[iou50[0]])
-        rows.append({
-            "category_id": category_id, "category_name": category["name"], "test_instances": count,
-            "mask_AP": ap, "mask_AP50": ap50,
-        })
+        rows.append(
+            {
+                "category_id": category_id,
+                "category_name": category["name"],
+                "test_instances": count,
+                "mask_AP": ap,
+                "mask_AP50": ap50,
+            }
+        )
     return rows
 
 

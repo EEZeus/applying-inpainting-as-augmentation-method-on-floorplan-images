@@ -1,6 +1,5 @@
 #!/bin/bash
-# OCR study, stages 1-2 (descriptive): text vs visual room classification and
-# two-stage AP on the 12 agnostic e0 dumps. CPU only.
+# OCR study stages 1-2 (descriptive): text vs visual classification, two-stage AP. CPU only.
 #SBATCH --job-name=fp-ocr-diag
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G

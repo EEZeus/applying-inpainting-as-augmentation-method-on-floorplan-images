@@ -29,8 +29,13 @@ def main():
         config["multi_room"]["random_jitter_percentage_points"] = args.percentage_jitter
     coco, _, train_ids, image_dir = load_inputs(config)
     result = build_multiroom_dataset(
-        config, coco, train_ids, image_dir, resolve_path(args.candidate_dir),
-        resolve_path(args.output_dir), strategy="c_multi",
+        config,
+        coco,
+        train_ids,
+        image_dir,
+        resolve_path(args.candidate_dir),
+        resolve_path(args.output_dir),
+        strategy="c_multi",
         sample_prefix="c-copy-paste-multi",
     )
     print(json.dumps(result, indent=2))
