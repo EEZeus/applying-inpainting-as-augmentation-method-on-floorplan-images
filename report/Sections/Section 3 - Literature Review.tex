@@ -1,9 +1,10 @@
 \section{Literature Review}
 
-The reading for this project covered three strands: what is known about
+The reading for this project covered four strands: what is known about
 augmenting instance segmentation, what is known about filling a long tail with
-generative models, and what the floor-plan literature offers as backbones and
-datasets. Each paper below is summarised with its venue, the availability of
+generative models, what the floor-plan literature offers as backbones and
+datasets, and, for the final experiments, how to read and represent the text
+printed on a drawing. Each paper below is summarised with its venue, the availability of
 code and data, the method, the main finding, and a comment on how it shaped the
 project.
 
@@ -148,11 +149,37 @@ and languages, and use large language and vision-language models to extract
 semantic labels from the heterogeneous text printed on the drawings. They
 demonstrate tasks that single-convention datasets cannot support. This is the
 closest published example of foundation models applied to architectural floor
-plans in a few-shot manner, and it points at a resource this project did not
-use. Our plans carry printed German room labels such as ``B\"uro'' and
-``Technik'' that a text-reading model could exploit directly. Since our
-vision-only classifier reached zero rare recall, reading the drawing's own text
-is probably a stronger signal than anything a diffusion model can add.
+plans in a few-shot manner, and it points at a resource the first five goals of
+this project ignored. Our plans carry printed German room labels such as
+``B\"uro'' and ``Technik'' that a text-reading model can exploit directly.
+After our vision-only classifier reached zero rare recall, Goal 6 read these
+labels with OCR, and the text proved a stronger class signal than anything the
+diffusion models added (Section~\ref{sec:ocr}).
+
+\paragraph{Baek et al., ``Character Region Awareness for Text Detection''
+(CVPR 2019) \cite{baek2019craft}.} Code and weights are at
+\url{https://github.com/clovaai/CRAFT-pytorch}. CRAFT localises text by
+predicting, for every pixel, a character-region score and an affinity score
+between neighbouring characters, and groups characters into words from these
+two maps. Character-level supervision is generated from word-level annotations
+by weak supervision. The authors report strong results on scene-text benchmarks
+with curved and arbitrarily oriented text. CRAFT is the detector inside
+EasyOCR \cite{easyocr}, which pairs it with a CRNN recogniser
+\cite{shi2017crnn} and which we used unchanged. Room labels on a floor plan are
+short, sparse, sometimes vertical and only a few pixels high at detector
+resolution, which is why we ran it on native-resolution tiles rather than on
+the resized plan.
+
+\paragraph{Wang et al., ``Multilingual E5 Text Embeddings: A Technical Report''
+(arXiv:2402.05672, 2024) \cite{wang2024me5}.} Weights are on Hugging Face. The
+models are trained by contrastive pre-training on about one billion
+multilingual text pairs, followed by supervised fine-tuning, and give sentence
+embeddings for about 100 languages that perform well on retrieval and semantic
+similarity benchmarks. The small variant with 384 dimensions supplied the
+token embeddings of Goal 6. Its value here is that a German label it has never
+seen with a class, such as ``Spindraum'', still lands near a related class name.
+In our experiments this zero-shot similarity recalled more rare rooms than any
+head trained on our 30 rare training rooms.
 
 \paragraph{Carion et al., ``SAM 3: Segment Anything with Concepts''
 (arXiv:2511.16719, 2025) \cite{carion2025sam3}.} Code and weights are at
@@ -163,7 +190,7 @@ decouples whether a concept is present from where it is. The model and its
 official trainer are the reason Goal 3 was feasible at all, since fine-tuning on
 35 images with 19 German category names as text concepts needed a configuration
 change rather than a new architecture. In our experiments it delivered the
-largest effect measured in the project, which reframed the augmentation question
+largest effect measured before the printed labels were used (Goal 6), which reframed the augmentation question
 as a second-order one.
 
 \paragraph{Oquab et al., ``DINOv2: Learning Robust Visual Features without

@@ -31,7 +31,7 @@ project asked one narrow question. Does diffusion or LoRA inpainting of rare
 rooms improve room-instance segmentation on this dataset, and does the answer
 depend on the backbone?
 
-The work has five parts, all carried out by the author. The first is an
+The work has six parts, all carried out by the author. The first is an
 augmentation stack that generates rare-room examples from training-split pixels
 only and admits them through automated structural and pixel checks. It produces
 fourteen controlled arms covering prompt-based inpainting, an exemplar-guided
@@ -49,7 +49,11 @@ The fifth audits the evaluation itself. It found that the cross-validation
 reused the images that had selected each checkpoint, that augmented arms saw
 real plans less often than the baseline, and that the diffusion arm generated
 almost no pixels, and it re-tested the surviving signals in pre-registered
-studies with fresh seeds.
+studies with fresh seeds. The sixth reads the room names printed on the plans
+with OCR and gives them to the detector's classifier and to a separate
+classifier over class-agnostic masks. The same part tests inpainting that
+replaces the printed name together with the class, and copy-paste scaled
+towards class balance.
 
 The result is negative and consistent. Across three seeds and five folds, no
 diffusion or LoRA arm beat the unaugmented baseline by a margin the data
@@ -63,7 +67,7 @@ checkpoint-selection images. Under a pre-registered, selection-free
 replication with 12 fresh seeds per arm, copy-paste gained $+0.011$ AP (95\,\%
 CI $-0.007$ to $+0.029$), and exemplar inpainting with a diffusion band wide
 enough to matter changed AP by $-0.004$, with an upper bound of $+0.009$ that
-excludes any practically relevant gain. On the 19-class problem, Strategy A, the prompt-based rare-room inpainting arm, led the baseline by $+0.006$ AP with a one-sided seed-level $p = 0.034$, the closest the project came to a positive result, but its interval over seeds and held-out images ($-0.004$ to $+0.019$) still includes zero. Rare-class AP stayed
+excludes any practically relevant gain. On the 19-class problem, Strategy A, the prompt-based rare-room inpainting arm, led the baseline by $+0.006$ AP with a one-sided seed-level $p = 0.034$, the closest any inpainting arm came to a positive result, but its interval over seeds and held-out images ($-0.004$ to $+0.019$) still includes zero. Rare-class AP stayed
 at or near zero everywhere.
 
 What did move the numbers was the backbone. SAM 3 scored $0.713$ class-agnostic
@@ -73,3 +77,17 @@ the negative result is still informative. Handed perfect ground-truth crops, the
 frozen DINOv2 classifier recalled zero rare instances. The failure therefore
 sits in room-type classification at a scale of 17 to 40 test instances. Neither
 the segmentation model nor the augmentation pipeline is the limiting factor.
+
+The printed room names explain much of that failure. Rooms of different classes
+often have the same shape and furniture, and the plan tells them apart by name.
+A Mask R-CNN whose classifier receives OCR features of the text inside each
+proposal reached $0.184$ multiclass mask AP against $0.100$ for the baseline,
+once the text branch was trained with its own optimiser. This result is
+exploratory: the pre-registered version of the branch, trained on the detector's
+schedule, did not learn and showed no gain. Labelling class-agnostic SAM 3 masks
+with an OCR text classifier gave $0.258$ multiclass AP on the test plans,
+more than twice the $0.115$ of SAM 3 alone. Synthetic data did not reproduce
+this effect. Replacing printed names by inpainting changed nothing measurable,
+and copy-paste of rare rooms towards class balance lowered AP as the dose
+grew. Rare-class AP improved only where text was read, and stayed below $0.13$
+in every system.

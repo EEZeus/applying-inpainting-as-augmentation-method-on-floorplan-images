@@ -1,14 +1,17 @@
 \section{Implementation and Evaluation Details}
 
-The project ran in four phases. Phase 1 audited and de-duplicated the source
+The project ran in six phases. Phase 1 audited and de-duplicated the source
 COCO data and froze a project-aware split. Phase 2 built the generation stack
 and the augmented datasets. Phase 3 ran the controlled Mask R-CNN matrix. After
 the first single-seed pass proved uninformative, it was extended to three seeds
 and then to a rotated held-out cross-validation. Phase 4 tested whether the
 verdict depended on the backbone, first by fine-tuning SAM 3 and then by
 splitting the task into a class-agnostic detector plus a frozen DINOv2
-classifier. The ordering was not planned in advance. Each phase responded to
-what the previous one had failed to show.
+classifier. Phase 5 audited the evaluation and re-tested the surviving signals
+in pre-registered studies with 12 fresh seeds per arm. Phase 6 read the room
+names printed on the plans with OCR and gave them to the classifiers. The
+ordering was not planned in advance. Each phase responded to what the previous
+one had failed to show.
 
 \subsection{Insights derived from previous work}
 
@@ -44,6 +47,11 @@ cross-validation and the two-stage decomposition. A null result would only be
 useful if it came with evidence about why it was null, and about whether the
 measurement could have detected an effect at all.
 
+A fourth reading mattered only later. WAFFLE \cite{ganon2025waffle} extracts
+room semantics from the text printed on floor plans. The early design treated
+that text as something to protect from the generator, and it became an input
+only after the DINOv2 classifier had failed on ground-truth crops (Goal 6).
+
 \subsection{Technologies used}
 
 Table~\ref{tab:tech} lists the main components. The detector is torchvision's
@@ -55,7 +63,9 @@ rooms; its mask conditioning is what allows the drawing outside the edited
 region to be preserved exactly. \texttt{peft} supplies the rank-8 LoRA. SAM 3
 was run through Meta's own training code, so the comparison uses the model as
 its authors configured it. DINOv2-base served only
-as a frozen encoder. Every AP in this report comes from \texttt{pycocotools} and
+as a frozen encoder. EasyOCR reads the printed room names, multilingual-e5-small
+embeds them, and OpenCV's Telea inpainting erases labels where the diffusion
+fill fails. Every AP in this report comes from \texttt{pycocotools} and
 therefore follows the standard COCO definition \cite{lin2014coco}.
 
 \begin{table}[H]
@@ -73,6 +83,9 @@ SD 1.5 inpainting & rev.\ \texttt{8a4288a7} & Strategy A/B/C generators \\
 \texttt{diffusers}, \texttt{peft} & pinned in \texttt{requirements.txt} & diffusion pipeline, rank-8 LoRA \\
 SAM 3 & \protect\path{facebookresearch/sam3} & foundation-model detector, PyTorch 2.10 \\
 DINOv2-base & \texttt{facebook/dinov2-base} & frozen crop encoder, stage 2 \\
+EasyOCR & 1.7.2, German and English models & room-label text extraction (Goal 6) \\
+multilingual-e5-small & \texttt{intfloat/multilingual-e5-small} & token embeddings for the text features \\
+OpenCV & \texttt{cv2.INPAINT\_TELEA} & label erasure fallback \\
 \texttt{pycocotools} & --- & COCO bbox and mask AP for every result \\
 Shapely & --- & polygon clipping for rare-centred crops \\
 \bottomrule
@@ -94,8 +107,11 @@ configuration and the two bug fixes described in Section~\ref{sec:problems}; the
 rotated held-out cross-validation; the DINOv2 feature extraction and two-stage
 evaluation; the confirmatory study of Section~\ref{sec:confirm}, with its
 exposure-parity sampler, wide-seam generator, matched datasets, gates,
-pre-registration and dependency-free statistics; and the analysis scripts that
-produce every table and figure here.
+pre-registration and dependency-free statistics; the OCR experiments of
+Section~\ref{sec:ocr}, with the tiled OCR cache, the token features, the text
+branch of the box head, the label replacement generator with its OCR check and
+the balanced copy-paste datasets; and the analysis scripts that produce every
+table and figure here.
 The interpretation, the statistical protocol and the decision to report a null
 result are likewise the author's.
 
@@ -464,6 +480,89 @@ labels the 483 class-agnostic proposals with the head and scores the result as
 multiclass instance segmentation, which puts the two-stage system on the same
 axis as the end-to-end fine-tuned detectors.
 
+\subsubsection{Goal 6: OCR features, the text branch and label replacement}
+\label{sec:ocrmethod}
+
+\paragraph{Text extraction.} Every plan was read once by EasyOCR
+\cite{easyocr}, which pairs a CRAFT text detector \cite{baek2019craft} with a
+recurrent recogniser \cite{shi2017crnn}, using its German and English Latin
+models. OCR runs at native resolution on tiles of $1600^2$ pixels with 256
+pixels of overlap, because the detector input of at most 1600 pixels per plan
+shrinks a room name to a few pixels. Tokens read twice in overlapping tiles are
+merged, and recognition is also tried at 90 and 270 degrees for vertical
+labels. The 56 plans yield 6461 tokens in about four minutes on one A100. OCR
+reads pixels only, so running it on validation and test plans exposes no
+annotation. A token counts as a \emph{label token} if at least two letters
+remain after lower-casing and removing digit runs. This drops room numbers such
+as ``45-03-012'' and keeps names such as ``B\"uro'' or ``Spindraum H''. Short
+symbol codes such as ``RS'' inside fire-door symbols also pass the filter.
+Figure~\ref{fig:ocrtokens} shows the tokens of one training plan.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/fig_ocr_tokens.png}
+\caption{OCR tokens on part of a training plan. Solid boxes are label tokens,
+dotted boxes are tokens with fewer than two letters. The red squares and the
+coloured fills belong to the plan itself.}
+\label{fig:ocrtokens}
+\end{figure}
+
+\paragraph{Token features.} Each distinct label string is represented by its
+multilingual-e5-small sentence embedding \cite{wang2024me5} (384 dimensions)
+and a 256-dimensional hashed bag of character trigrams, which keeps
+abbreviations such as ``Putzr.'' apart from full words. The vector also carries
+the cosine similarity of the embedding to each of the 19 class names. Class
+names are label metadata, so this part acts as a zero-shot prior and uses no
+annotation. The features were fixed before any detector run.
+
+\paragraph{The text branch.} Inside the Mask R-CNN box head, the label tokens
+of a plan are matched to every region proposal. For each proposal the matched
+tokens are pooled into a confidence-weighted mean of their features, the
+maximum class-name similarity, a flag for whether any token matched and the
+logarithm of the token count. A perceptron with one hidden layer of 256 units
+maps this vector to the 1024-dimensional box feature and adds it to the input
+of the classification layer only, so box regression and the mask branch are
+untouched. Its last layer starts at zero, which makes the untrained model
+identical to e0. During training each token is dropped with probability 0.15,
+and all tokens of a plan with probability 0.15. Arm e19 matches a token to a
+proposal when the token centre lies inside the proposal box and trains the
+branch with the detector's SGD schedule. Arm e21 matches a token only when at
+least half of its box lies inside the proposal, and trains the branch with its
+own AdamW optimiser (learning rate $10^{-3}$, weight decay $10^{-4}$, no step
+decay) while the detector keeps the SGD schedule of e0.
+
+\paragraph{Label replacement.} Arms e18 and e20 change the printed name
+together with the annotation. The Strategy B geometry screening picks frequent
+rooms compatible with each rare class, with the budget $\min(3n, 20) - n$ for a
+class with $n$ training rooms. The OCR label boxes inside a chosen room are
+erased by Stable Diffusion 1.5 inpainting restricted to those boxes. When the
+fill fails a check on dark pixels and colour deviation, Telea inpainting
+\cite{telea2004inpainting} is used instead. A name of the target class, drawn
+from the OCR vocabulary of real training rooms of that class, is rendered at
+the font size and colour of the erased label, and the annotation is relabelled.
+A second OCR pass admits the room only if it reads the new name with string
+similarity of at least 0.75 and no longer reads the old one. Each room is
+edited twice with different names, and variant $v$ of a plan applies all
+$v$-th edits. Both arms use the paired-variant sampler of
+Section~\ref{sec:confirm}.
+
+\paragraph{Two-stage OCR labelling.} The masks of the 12 class-agnostic e0
+runs of the confirmatory study, already scored on the 21 held-out plans, are
+labelled by a multinomial logistic regression on the pooled token features of
+each mask. The regression is trained on the 887 training rooms with class
+weights $1/\sqrt{n}$. Each mask is emitted with its three most probable
+classes, scored as detection score times class probability. A second
+version of the regression adds the 412 rare rooms converted by copy-paste for
+arm e24, described below, to its training rooms. This second version also
+labels the class-agnostic SAM 3 test masks of Section~\ref{sec:results}.
+
+\paragraph{Copy-paste towards class balance.} Arms e22 to e24 scale the
+Strategy C copy-paste of e8 and e16 to a target of 20, 50 or 100 training
+instances per rare class (real plus converted), reusing each real donor room up
+to 4, 10 or 20 times. All accepted edits of a source plan form one synthetic
+variant, and the paired-variant sampler keeps the plan order and step budget of
+e0.
+
 \subsection{Ethical considerations}
 
 The dataset contains architectural drawings of real, identifiable buildings.
@@ -486,7 +585,11 @@ The pipeline mitigates this by construction rather than by convention. Synthetic
 images live in separate directories, carry a strategy field and a stable
 synthetic identifier in their records, and are never written back into the
 source dataset, which stays byte-identical throughout. This report reproduces
-synthetic panels only inside labelled quality-control figures.
+synthetic panels only inside labelled quality-control figures. The label
+replacement of Goal 6 sharpens the risk, because it also rewrites the printed
+room name, so the forged plan no longer contradicts its own annotation. Its
+outputs carry the same provenance fields and directory separation. OCR, like
+the diffusion models, ran locally on the cluster with offline model copies.
 
 A second concern is honest reporting. Generation metadata records semantic
 correctness as unverified wherever the automatic checks cannot establish that a
@@ -497,12 +600,15 @@ retained visible common-room text labels such as ``B\"uro'' in some accepted sam
 as it was actually used, with that caveat attached.
 The project's central claim is negative, and it is reported as such, with $n$,
 standard deviation and $p$-value, instead of being narrowed to whichever arms
-and metrics happen to look favourable.
+and metrics happen to look favourable. For the same reason the largest gains in
+the report, from the OCR follow-up, are marked as exploratory wherever they
+appear, because that experiment was designed after seeing the results it
+builds on.
 
 \subsection{Reproducibility and code availability}
 
 All code, configuration, tests and documentation are in a single Git repository
-at commit \texttt{0daf760}. Datasets, model weights and outputs are
+at commit \texttt{d1605be}. Datasets, model weights and outputs are
 machine-local and deliberately untracked. The cluster checkout lives in one
 directory, \protect\path{/netscratch/espandar/inpainting/floorplan-inpainting/}, with
 code in \texttt{src/}, \texttt{scripts/}, \texttt{slurm/} and
@@ -512,11 +618,13 @@ The consolidated summaries cited in this report sit in
 \protect\path{outputs/final/}, one directory per experiment, each holding a
 \texttt{summary.json} and a \texttt{summary.csv}.
 
-Two conda environments are needed because the two backbones have incompatible
+Three conda environments are needed because the components have incompatible
 requirements: PyTorch 2.1.2 for data preparation, the diffusion generators, Mask
-R-CNN and the DINOv2 stage, and PyTorch 2.10 for SAM 3. Experiments run on the
+R-CNN and the DINOv2 stage, PyTorch 2.10 for SAM 3, and a separate environment
+with EasyOCR 1.7.2 on PyTorch 2.1.2 for the OCR features, built by
+\protect\path{scripts/setup_ocr_env.sh}. Experiments run on the
 DFKI Pegasus Slurm cluster on A100 and H100 nodes, with SAM 3 jobs pinned to the
-80\,GB GPU tier. Six submit scripts reproduce the whole set of results. Each is
+80\,GB GPU tier. Eight submit scripts reproduce the whole set of results. Each is
 a dependency chain that builds its inputs, smoke-tests one task, runs the full
 array and then analyses the output.
 
@@ -536,6 +644,8 @@ Script & Work & Output \\
 \protect\path{scripts/submit_dino.sh}     & DINOv2 extraction, heads and two-stage eval & \protect\path{outputs/final/dino/} \\
 \protect\path{scripts/submit_confirm.sh} & re-score, wide-seam generation, 48-run confirmation & \protect\path{outputs/final/confirm/} \\
 \protect\path{scripts/submit_confirm_mc.sh} & 36-run multiclass follow-up & \protect\path{outputs/final/confirm_mc/} \\
+\protect\path{scripts/submit_ocr_study.sh} & OCR, label replacement, 36-run study & \protect\path{outputs/final/ocr_study/} \\
+\protect\path{scripts/submit_followup.sh} & balanced copy-paste, 48 runs, two-stage & \protect\path{outputs/final/followup/} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -551,7 +661,8 @@ reproducibility across different GPU models is not claimed. Detector training
 uses mixed precision and a fixed seed, and the seed-to-seed spread reported in
 Section~\ref{sec:results} is the residual variation this leaves. The figures are
 regenerated from the fetched summary files by
-\protect\path{report/scripts/make_figures.py}, which is committed alongside them.
+\protect\path{report/scripts/make_figures.py} and, for Section~\ref{sec:ocr},
+\protect\path{report/scripts/make_ocr_figures.py}.
 
 At the time of writing the repository has not been pushed to a public forge, so
 the cluster checkout is synchronised in place from the local \texttt{main}
@@ -568,9 +679,10 @@ This is the fundamental problem, and it was not solved. Six rare categories are
 scored on 17 test instances, four of them on two instances or fewer. A COCO AP
 over two instances takes only a handful of discrete values, so a genuine small
 improvement in rare-class segmentation is not representable, let alone
-distinguishable from noise. Two mitigations were built. Three seeds measure the
+distinguishable from noise. The mitigations were built in stages. Three seeds measure the
 noise, and the cross-validation raises the pooled rare support from 17 to 40.
-Both helped characterise the measurement without removing the ceiling. The
+The later studies add 12 seeds per arm and score all 21 held-out plans.
+These measures characterise the measurement without removing the ceiling. The
 honest statement of the outcome is that the experiment can exclude a large
 rare-class effect and cannot resolve a small one.
 
@@ -637,3 +749,14 @@ generated pixels. They were repaired in a pre-registered confirmatory study
 numbers. A prediction-dump defect found during its smoke test
 (\texttt{pycocotools} adds NumPy-typed fields to result records in place) was
 fixed before the full run.
+
+\emph{OCR infrastructure and label erasure.} The stored Hugging Face token on
+the cluster had expired, and the hub then refused even anonymous downloads of
+public models, so the multilingual-e5 weights were fetched without a token and
+all later jobs ran with the hub in offline mode. EasyOCR runs on the CPU were
+killed on the login node and had to be moved to compute nodes. The diffusion
+eraser rarely passed its check on dark pixels and colour deviation on the real
+plans, so Telea inpainting did most of the erasing
+(Section~\ref{sec:ocrstudy}). The most consequential problem was found only
+after the pre-registered runs: the text branch had barely trained under the
+detector's schedule, which the follow-up then corrected.

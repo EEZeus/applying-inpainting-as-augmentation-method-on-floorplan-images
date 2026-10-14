@@ -101,3 +101,17 @@ often than the baseline, and the diffusion arm regenerated only a band about
 one latent cell wide. Goal 5 repairs these and re-tests the surviving signals
 in a pre-registered study with fresh seeds. Success is a confirmatory answer
 with a confidence interval, whichever way it falls.
+
+\subsubsection{Goal 6: Use the printed room labels}
+
+Goals 1 to 5 treated room classification as a visual problem. The plans,
+however, print the room name inside most rooms, and that name is read by
+people who use the plans. Goal 6 adds the printed text as an input: OCR tokens
+inside a room are turned into features for the detector's classifier and for a
+separate classifier over class-agnostic masks. It also tests a form of
+augmentation that changes the printed name together with the class, and
+whether copy-paste helps once it brings the rare classes close to balance.
+Success is a measured change in multiclass mask AP against the same baseline
+runs used in Goal 5, under the same paired tests, with the text model and the
+label replacement tested in a pre-registered study and the later variants
+reported as exploratory.

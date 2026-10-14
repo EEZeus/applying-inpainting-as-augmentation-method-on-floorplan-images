@@ -269,7 +269,7 @@ the per-class breakdown. Recall is $0.96$ for Treppe, $0.82$ for WC and $0.69$
 for Aufzug, then collapses to $0.15$ for Lager, $0.08$ for Technikraum, and
 exactly zero for K\"uche, Flur, Besprechungsraum and all six rare classes. Since
 localisation is not involved, this places the failure squarely in room-type
-classification, and it shows that the failure is not confined to the tail. Three head classes with 3--16 test instances also score zero.
+classification, and it shows that the failure is not confined to the tail. Three head classes with 3--16 test instances also score zero. Section~\ref{sec:ocr} repeats this evaluation with features of the printed room names in place of, and in addition to, the DINOv2 features.
 
 \begin{figure}[H]
 \centering
@@ -367,7 +367,7 @@ in the project.
 
 What the evidence does not support is the premise the project set out to test.
 Rare-class room segmentation is not merely unimproved by augmentation. It is out
-of reach at this data scale by every method tried. Rare AP sits at or near zero
+of reach at this data scale for every model that does not read the printed room names. Rare AP sits at or near zero
 across all fourteen arms, both backbones and both evaluation protocols, and
 rare-macro recall is exactly zero even when a frozen classifier receives perfect
 ground-truth crops. With 17 rare test instances, or 40 pooled over the
@@ -375,3 +375,6 @@ cross-validation, the experiment can exclude a large effect and cannot resolve a
 small one. Class-agnostic localisation, meanwhile, already works, at $0.588$ to
 $0.647$ AP for Mask R-CNN and $0.713$ for SAM 3. The unsolved component is
 room-type classification, and a dedicated frozen classifier did not fix it.
+Section~\ref{sec:confirm} re-tests the surviving augmentation signals without
+the evaluation's confounds, and Section~\ref{sec:ocr} returns to the
+classification component with the room names printed on the plans.

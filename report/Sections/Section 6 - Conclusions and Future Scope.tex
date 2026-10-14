@@ -4,7 +4,8 @@ The project set out to determine whether diffusion or LoRA inpainting of rare
 room types improves room-instance segmentation of architectural floor plans, and
 whether the answer depends on the backbone. The measured answer is that it does
 not improve segmentation, and that the backbone matters far more than the
-augmentation.
+augmentation. What did improve room classification was reading the room names
+printed on the plans.
 
 Goal 1 was achieved as specified. Fourteen controlled arms were built on
 generators that read only frozen training images, with each accepted sample
@@ -59,9 +60,29 @@ led the baseline by $+0.006$ AP with a one-sided seed-level $p = 0.034$ and
 the same sign in all three held-out buildings, but most of the gain came from
 one building and the interval over seeds and images ($-0.004$ to $+0.019$)
 includes zero, so it does not meet the pre-registered criterion. It is the
-only place in the project where generated pixels point in a positive direction,
-and it is small, concentrated on frequent classes, and unconfirmed. Rare-class
-AP stayed below $0.002$ in every arm.
+only place in the project where generated pixels point in a positive direction.
+The gain is small and unconfirmed, and it comes from frequent classes.
+Rare-class AP stayed below $0.002$ in every arm.
+
+Goal 6 found the information the earlier classifiers were missing. OCR finds a
+label token in 87\,\% of the held-out rooms, and on ground-truth rooms the
+text features raise classification accuracy from $0.452$ with DINOv2 features
+alone to $0.729$ with both. The pre-registered study still returned three null
+results. The text branch, trained on the detector's schedule, barely moved from
+its zero initialisation, and label replacement produced only 34 admitted rooms,
+because most rare-class names do not fit inside the frequent rooms they would
+replace. With its own AdamW optimiser the same branch raised multiclass mask AP
+from $0.100$ to $0.184$ (95\,\% CI of the gain $+0.070$ to $+0.112$), with
+the largest gains on rooms with distinctive names such as K\"uche and
+Besprechungsraum. A text classifier
+over class-agnostic SAM 3 masks reached $0.258$ on the test plans against
+$0.115$ for SAM 3 alone. Both results come from the exploratory follow-up and
+need a fresh confirmation. The same follow-up closed the question of synthetic
+dose: copy-paste that brought each rare class to 63 to 95 training instances
+lowered multiclass AP by $0.017$ and raised rare AP only to $0.005$. Synthetic
+rare rooms helped in one place, the two-stage text classifier, where they
+raised rare AP from $0.099$ to $0.126$. The classifier behind the $0.258$ on
+SAM 3 masks was trained with them.
 
 The wider conclusion is a scope statement rather than a defeat. The generative
 augmentation literature surveyed in Section~3 reports its gains on benchmarks
@@ -80,20 +101,30 @@ Figure~\ref{fig:loraval} shows. Part of the reason is that the mask construction
 protects detected dark strokes, and the printed room labels and symbols that
 identify a room type are exactly those strokes. The safety machinery that made
 the augmentation trustworthy also removed most of what carried the class signal.
+Section~\ref{sec:ocr} confirms that this signal is the printed name: a model
+that reads it gains more than any augmentation, and a model that only sees the
+plan at detector resolution cannot use it.
 
 \subsection*{Future scope}
 
-Five directions follow from the measurements rather than from speculation,
+Six directions follow from the measurements rather than from speculation,
 ordered by expected value per unit of effort.
 
-\emph{Read the drawing's own text.} Every plan in this dataset prints the room
-type inside the room, such as ``B\"uro'', ``Technik'' or ``Abstellraum''. The
-vision-only classifier scored zero recall on all six rare classes while that
-label sat inside the crop it was given. Pairing the class-agnostic detector,
-which already works, with OCR or a vision-language model over the crop is the
-obvious next experiment, and WAFFLE \cite{ganon2025waffle} demonstrates the
-approach at scale on heterogeneous floor plans. This is likely to move the
-multiclass number more than anything attempted in this project.
+\emph{Confirm the text model and move it to SAM 3.} The gain of the text
+branch comes from an exploratory arm on held-out plans that earlier arms had
+already used. It needs a confirmation on fresh seeds and, ideally, on plans
+from buildings outside the current split. The SAM 3 result suggests that the
+branch belongs on the stronger backbone, either inside its classifier or as the
+two-stage text classifier used here. WAFFLE \cite{ganon2025waffle} reads
+floor-plan text at a much larger scale and is the closest reference.
+
+\emph{Handle names that training never saw.} Rare-class AP stays below $0.13$
+even when text is read, because many rare rooms carry names such as
+``Spindraum'' that do not occur in the training plans. The zero-shot similarity
+between a name and the class names already recalls more rare rooms than any
+trained head. A lexicon of German room names per class, or a language model
+asked to map a printed name to a class, would extend this without new
+annotation.
 
 \emph{Try a loss-side long-tail treatment before any further data synthesis.}
 The project spent its effort on the data and none on the objective. A Seesaw
@@ -102,27 +133,20 @@ and attacks the classification imbalance that the two-stage experiment
 identified as the actual failure. It should be run on the SAM 3 backbone, where
 the headroom is.
 
-\emph{Fix the semantic gap in generation, or steer instead of adapting.} If
-generative augmentation is revisited, the literature already identifies two
-concrete fixes. Gen-n-Val \cite{huang2025gennval} shows that a semantic
-validator, not more generation, is the binding constraint. Our pipeline could
-certify structural safety while recording semantic correctness as unverified for
-every prompt-based sample. DoGE \cite{wang2024doge} avoids adapter training
-entirely by steering a frozen generator with a domain-gap embedding, which suits
-a 30-instance tail better than LoRA fine-tuning does. The revised generator
-implemented late in this project, which masks compact interior labels while
-preserving structural lines and seeds generation with a real rare exemplar, is
-built but was never run through the full grid. It is the cheapest of these to
-complete. TMI \cite{song2026tmi} additionally predicts that the prompt-driven
-and exemplar-driven families are complementary and that neither works alone,
-which matches what was observed here and makes the combination worth one run.
+\emph{Revisit generation only with the text in view.} Label replacement was
+limited by space: a rare-class name rarely fits inside the frequent room it
+replaces, and the diffusion fill failed the erasure check in most rooms. A
+generator that chooses target rooms by the size of the name to be printed, or
+abbreviates names as the plans themselves do (``Abst.'', ``Putzr.''), would
+raise the yield. Gen-n-Val \cite{huang2025gennval} and DoGE \cite{wang2024doge}
+remain the relevant references for validating and steering the generator.
 
-\emph{Vary the synthetic dose explicitly and fix the training protocol.} The
-only augmentation signal that survived re-scoring tracks how many synthetic
-rooms an arm sees, not how they were made. A dose-response study, run with a
-batch size above one or frozen BatchNorm and a schedule long enough that the
-baseline has converged, would test that directly and is cheap with the
-generators that already exist.
+\emph{Fix the training protocol.} Every Mask R-CNN arm trained for 875
+optimiser steps at batch size 1 with plain BatchNorm, and the learning rate was
+cut tenfold after 280 of them. The text branch showed how much this schedule can
+hide: the same branch gave nothing on it and $+0.085$ AP with its own
+optimiser. A longer schedule should be the default for any further comparison,
+together with frozen BatchNorm or a larger batch.
 
 \emph{Collect more rare-class test data before running anything else.} This is
 the least interesting recommendation and the most important one. Seventeen rare
@@ -132,4 +156,5 @@ instances, reachable by annotating a few dozen further plans from the same
 archive, would make the difference between excluding a large effect and
 measuring a real one. Until that exists, the defensible use of this dataset is
 class-agnostic room extraction, where both backbones already perform well, with
-room typing handled by the printed labels rather than by appearance.
+room classification taken from the printed labels, as Section~\ref{sec:ocr}
+supports.

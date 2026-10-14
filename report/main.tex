@@ -34,7 +34,7 @@
 of Architectural Floor Plans \\[1ex] \large Data Science and its Applications
 project report for WiSe 2025-26}
 \author{Ehsan Espandar \\ ehsan\_espandar@edu.rptu.de}
-\date{10 September, 2026}
+\date{14 October, 2026}
 
 \pagenumbering{gobble}
 
@@ -75,32 +75,40 @@ categories contribute 70 of 1633 polygon annotations and only 17 test instances.
 This report asks whether generating additional rare-room examples with diffusion
 inpainting repairs that imbalance, and whether the answer depends on the
 detection backbone. Fourteen augmentation arms were built from the training
-split alone, covering prompt-based Stable Diffusion 1.5 inpainting, an
-exemplar-guided variant with copy-paste and feather-blend controls, and a rank-8
-LoRA adapter. Each arm was evaluated with a torchvision Mask R-CNN over three
+split alone. They cover prompt-based Stable Diffusion 1.5 inpainting and a
+rank-8 LoRA adapter, plus an exemplar-guided variant with copy-paste and
+feather-blend controls. Each arm was evaluated with a torchvision Mask R-CNN over three
 seeds and a rotated held-out cross-validation, and compared against a fine-tuned
 SAM 3 and a two-stage pipeline that labels class-agnostic proposals with a
-frozen DINOv2 classifier. An audit of that evaluation found that the
-cross-validation reused the checkpoint-selection images, that augmented arms saw
-real plans less often than the baseline, and that the diffusion arm generated
-almost no pixels. A pre-registered confirmatory study repaired these defects and
-re-tested the surviving signals with 12 fresh seeds per arm. Exemplar inpainting
-with a diffusion band of three latent cells changed class-agnostic mask AP by
-$-0.004$ (95\,\% CI $-0.019$ to $+0.009$), which excludes a practically relevant
-gain, and plain copy-paste, the strongest arm of the original grid at $+0.036$,
-gained only $+0.011$ (CI $-0.007$ to $+0.029$). A multiclass follow-up found Strategy A, prompt-based inpainting of rare rooms, ahead of the baseline by $+0.006$ AP (one-sided seed-level $p = 0.034$), but its seed-and-image interval ($-0.004$ to $+0.019$) includes zero, so the gain is not established. Rare-class
-AP stayed at or near zero for every method, and the frozen DINOv2 classifier
-recalled zero rare instances even on perfect ground-truth crops. The dominant
-effect was the backbone: SAM 3 exceeded the best Mask R-CNN arm by $0.089$
-class-agnostic AP, about four times the typical augmentation effect.
-Class-agnostic room localisation is already solved to $0.59$--$0.71$ AP. The
-unsolved problem is room-type classification at this data scale, and inpainting
-augmentation does not address it.
+frozen DINOv2 classifier. An audit found that the cross-validation reused the
+checkpoint-selection images and that augmented arms saw real plans less often
+than the baseline. A pre-registered confirmatory study repaired these defects
+and re-tested the surviving signals with 12 fresh seeds per arm. Exemplar
+inpainting changed class-agnostic mask AP by $-0.004$ (95\,\% CI $-0.019$ to
+$+0.009$), and plain copy-paste gained $+0.011$ (CI $-0.007$ to $+0.029$).
+Rare-class AP stayed at or near zero for every augmentation, and the DINOv2
+classifier recalled no rare room even on ground-truth crops.
+
+The plans print the room name inside most rooms, and a final set of
+experiments read it with OCR. In a pre-registered study a text branch in the Mask R-CNN
+classifier, trained with the detector's schedule, barely left its zero
+initialisation and gave no gain. Given its own optimiser in an exploratory
+follow-up, the same branch raised multiclass mask AP from $0.100$ to $0.184$
+(12 seeds, 95\,\% CI of the gain $+0.070$ to $+0.112$). An OCR text classifier
+applied to class-agnostic SAM 3 masks reached $0.258$ multiclass AP on the test
+plans, against $0.115$ for SAM 3 alone. Erasing printed names by inpainting and
+rendering rare-class names in their place had no measurable effect, and
+copy-paste of rare rooms towards class balance lowered the detector's AP by up
+to $0.017$, although the same synthetic rooms raised the rare-class AP of the
+text classifier from $0.099$ to $0.126$.
+Room localisation is already solved to $0.59$--$0.71$ class-agnostic AP on this
+data. Room classification depends on the printed label, which inpainting
+augmentation of the training pixels does not supply.
 \end{abstract}
 
 \keywords{instance segmentation; data augmentation; diffusion inpainting; LoRA;
 long-tailed recognition; architectural floor plans; Mask R-CNN; SAM 3; DINOv2;
-negative result}
+OCR; negative result}
 %TC:endignore
 
 \pagebreak
@@ -125,6 +133,8 @@ negative result}
 \input{Sections/Section 5 - Results.tex}
 
 \input{Sections/Section 5b - Confirmatory Study.tex}
+
+\input{Sections/Section 5c - Printed Room Labels.tex}
 
 \input{Sections/Section 6 - Conclusions and Future Scope.tex}
 
